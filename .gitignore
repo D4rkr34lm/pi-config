@@ -1,3 +1,9 @@
+# Dependencies
+node_modules
 bin
+
+# Stored data
 sessions
+
+# Env
 auth.json

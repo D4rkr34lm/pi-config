@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "target": "es2025",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true
+  },
+  "include": [
+    "extensions/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ],
+}

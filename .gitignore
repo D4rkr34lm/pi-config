@@ -4,6 +4,7 @@ bin
 
 # Stored data
 sessions
+data
 
 # Env
 auth.json

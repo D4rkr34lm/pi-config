@@ -6,7 +6,8 @@
     "noUncheckedIndexedAccess": true
   },
   "include": [
-    "extensions/**/*.ts"
+    "extensions/**/*.ts",
+    "utils/**/*.ts"
   ],
   "exclude": [
     "node_modules"

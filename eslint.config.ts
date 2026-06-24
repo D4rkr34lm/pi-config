@@ -6,7 +6,17 @@ import markdown from "@eslint/markdown";
 import prettier from "eslint-plugin-prettier/recommended";
 
 export default defineConfig([
-  globalIgnores(["node_modules", "dist", "build", "coverage"]),
+  globalIgnores([
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
+    "bin",
+    "sessions",
+    "data",
+    "auth.json",
+    "pnpm-lock.yaml",
+  ]),
   js.configs.recommended,
   markdown.configs.recommended,
   ...ts.configs.recommended,

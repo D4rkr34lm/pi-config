@@ -2,6 +2,7 @@ import { Parse } from "typebox/value";
 import { SimpleSessionPersistenceApi } from "../../utils/types";
 import { Todo, todoSchema } from "./store";
 import { hasValue } from "../../utils/type-guards";
+import { groupBy, last, values } from "lodash-es";
 
 export function useTodoRepository(api: SimpleSessionPersistenceApi) {
   function writeTodo(todo: Todo) {
@@ -20,7 +21,12 @@ export function useTodoRepository(api: SimpleSessionPersistenceApi) {
       })
       .filter(hasValue);
 
-    return todos;
+    const todoHistoryMap = groupBy(todos, (todo) => todo.id);
+    const latestTodos = values(todoHistoryMap)
+      .map((todoHistory) => last(todoHistory))
+      .filter(hasValue);
+
+    return latestTodos;
   }
 
   return {

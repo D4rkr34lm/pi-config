@@ -38,22 +38,21 @@ function statusIcon(todo: Todo, theme: Theme) {
   }
 }
 
-function statusColor(todo: Todo): "success" | "error" | "accent" {
+function statusLabel(todo: Todo) {
   switch (todo.status) {
     case "completed":
-      return "success";
+      return "Completed";
     case "aborted":
-      return "error";
+      return "Aborted";
     case "pending":
-      return "accent";
+      return "Open";
   }
 }
 
 function todoSummary(todo: Todo, theme: Theme) {
-  return `${statusIcon(todo, theme)} ${theme.bold(todo.title)} ${theme.fg(
-    "dim",
-    `#${todo.id}`
-  )}`;
+  return `${statusIcon(todo, theme)} ${theme.bold(`${statusLabel(todo)} Todo:`)} ${theme.bold(
+    todo.title
+  )} - ${theme.fg("dim", `#${todo.id}`)}`;
 }
 
 function todoLine(todo: Todo, theme: Theme) {
@@ -172,27 +171,15 @@ export function renderReadTodoResult(
   if ("todo" in result) {
     const todo = result.todo;
     const lines = [
-      `${theme.fg("success", "✓")} ${theme.bold("Read todo")}`,
-      `${theme.fg("muted", "╭─")} ${todoSummary(todo, theme)}`,
-      `${theme.fg("muted", "│")} ${theme.fg("dim", "status:")} ${theme.fg(
-        statusColor(todo),
-        todo.status
-      )}`,
-      `${theme.fg("muted", "│")}`,
-      `${theme.fg("muted", "│")} ${theme.fg(
-        "muted",
-        todo.description || "No description"
-      )}`,
-      ...(todo.abortJustification
+      todoSummary(todo, theme),
+      ...(todo.description.trim()
+        ? [`  ${theme.fg("muted", shortText(todo.description))}`]
+        : []),
+      ...(todo.abortJustification?.trim()
         ? [
-            `${theme.fg("muted", "│")}`,
-            `${theme.fg("muted", "│")} ${theme.fg(
-              "error",
-              `aborted: ${todo.abortJustification}`
-            )}`,
+            `  ${theme.fg("muted", `reason: ${shortText(todo.abortJustification)}`)}`,
           ]
         : []),
-      `${theme.fg("muted", "╰─")}`,
     ];
 
     component.setText(lines.join("\n"));

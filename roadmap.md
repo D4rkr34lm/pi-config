@@ -28,16 +28,16 @@ Aggregate total usage of the agent.
 
 ### Todos
 
-Status: `in progress`\
-Version: `1.0.0`
+Status: `implemented`\
+Version: `1.1.0`
 
 Give the agent tools to manage a divide and conquer strategy for tasks that are too big to be solved in a go and allow for step by step validation.
 
-- [ ] Agent can write bulk todos
-- [ ] Agent can edit a todo
-- [ ] Agent can mark a todo as `done` or `aborted`
+- [X] Agent can write bulk todos
+- [X] Agent can edit a todo
+- [X] Agent can mark a todo as `done` or `aborted`
 - [ ] Agent can list all todos
-- [ ] Agent can list all `open` todos
+- [X] Agent can list all `open` todos
 
 ### Watchdog
 

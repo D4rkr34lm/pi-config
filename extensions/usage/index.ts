@@ -69,7 +69,8 @@ const getDefaultSessionDir = (): string => {
   const explicitSessionDir = process.env.PI_CODING_AGENT_SESSION_DIR;
   if (explicitSessionDir) return explicitSessionDir;
 
-  const agentDir = process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
+  const agentDir =
+    process.env.PI_CODING_AGENT_DIR ?? join(homedir(), ".pi", "agent");
   return join(agentDir, "sessions");
 };
 
@@ -128,7 +129,9 @@ const extractMessageUsage = (line: string): MessageUsage | undefined => {
   };
 };
 
-const readMessageUsages = async (sessionTreeFile: string): Promise<MessageUsage[]> => {
+const readMessageUsages = async (
+  sessionTreeFile: string
+): Promise<MessageUsage[]> => {
   const content = await readFile(sessionTreeFile, "utf8");
   const messageUsages: MessageUsage[] = [];
 
@@ -165,7 +168,10 @@ const scanUsage = async (): Promise<ScanResult> => {
   };
 };
 
-const addMessageUsageToTotals = (totals: Totals, messageUsage: MessageUsage): void => {
+const addMessageUsageToTotals = (
+  totals: Totals,
+  messageUsage: MessageUsage
+): void => {
   const { usage } = messageUsage;
   const cost = usage.cost ?? {};
 
@@ -187,7 +193,9 @@ const aggregateTotals = (messageUsages: MessageUsage[]): Totals => {
   return totals;
 };
 
-const aggregateByModel = (messageUsages: MessageUsage[]): Map<string, Totals> => {
+const aggregateByModel = (
+  messageUsages: MessageUsage[]
+): Map<string, Totals> => {
   const byModel = new Map<string, Totals>();
 
   for (const messageUsage of messageUsages) {
@@ -260,7 +268,8 @@ const renderReport = (scan: ScanResult): string => {
 
 export default function (pi: ExtensionAPI) {
   pi.registerCommand(COMMAND_NAME, {
-    description: "Show cumulative token and cost usage across all saved sessions",
+    description:
+      "Show cumulative token and cost usage across all saved sessions",
     handler: async (_args, ctx) => {
       const report = renderReport(await scanUsage());
 

@@ -1,6 +1,6 @@
 import { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import path from "path";
-import { countBy, isString, toPairs } from "lodash-es";
+import { countBy, startsWith, toPairs } from "lodash-es";
 import { homedir } from "os";
 import { existsSync } from "fs";
 import { mkdir, readdir, readFile, writeFile } from "fs/promises";
@@ -135,6 +135,8 @@ function formatAnalyticsReport(events: AnalyticsEvent[]): string[] {
 
 export default function (pi: ExtensionAPI) {
   pi.registerCommand("analytics", {
+    description:
+      "Show analytics report, detailing usage of tools, prompt templates, and skills.",
     handler: async (args, ctx) => {
       const sessionId = ctx.sessionManager.getSessionId();
       const analyticsStore = await useAnalyticsStore(sessionId);
@@ -161,37 +163,35 @@ export default function (pi: ExtensionAPI) {
     });
   });
 
-  pi.on("message_start", async (event, ctx) => {
-    if (event.message.role === "user" && isString(event.message.content)) {
-      const messageContent = event.message.content;
-      const sessionId = ctx.sessionManager.getSessionId();
-      const analyticsStore = await useAnalyticsStore(sessionId);
+  pi.on("input", async (event, ctx) => {
+    const messageContent = event.text;
+    const sessionId = ctx.sessionManager.getSessionId();
+    const analyticsStore = await useAnalyticsStore(sessionId);
 
-      const skills = pi.getCommands().filter((cmd) => cmd.source === "skill");
-      const matchedSkill = skills.find((cmd) =>
-        messageContent.includes(cmd.name)
-      );
+    const skills = pi.getCommands().filter((cmd) => cmd.source === "skill");
+    const matchedSkill = skills.find((cmd) =>
+      startsWith(messageContent, `/skill:${cmd.name}`)
+    );
 
-      const templatePrompts = pi
-        .getCommands()
-        .filter((cmd) => cmd.source === "prompt");
-      const matchedTemplate = templatePrompts.find((cmd) =>
-        messageContent.includes(cmd.name)
-      );
+    const templatePrompts = pi
+      .getCommands()
+      .filter((cmd) => cmd.source === "prompt");
+    const matchedTemplate = templatePrompts.find((cmd) =>
+      startsWith(messageContent, `/${cmd.name}`)
+    );
 
-      if (matchedSkill) {
-        analyticsStore.recordEvent({
-          type: "skill",
-          resourceId: matchedSkill.name,
-          timestamp: Date.now(),
-        });
-      } else if (matchedTemplate) {
-        analyticsStore.recordEvent({
-          type: "prompt-template",
-          resourceId: matchedTemplate.name,
-          timestamp: Date.now(),
-        });
-      }
+    if (matchedSkill) {
+      analyticsStore.recordEvent({
+        type: "skill",
+        resourceId: matchedSkill.name,
+        timestamp: Date.now(),
+      });
+    } else if (matchedTemplate) {
+      analyticsStore.recordEvent({
+        type: "prompt-template",
+        resourceId: matchedTemplate.name,
+        timestamp: Date.now(),
+      });
     }
   });
 }

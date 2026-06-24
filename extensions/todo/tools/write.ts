@@ -70,11 +70,12 @@ export function executeWriteTodo(
       content: [
         {
           type: "text",
-          text: `Failed to create some todos:\n 
-                  ${notExecutableTodos
-                    .map((t) => `- ${t.todoId}: ${t.error}`)
-                    .join("\n")}
-                  `,
+          text: [
+            `Failed to write ${notExecutableTodos.length} todo${
+              notExecutableTodos.length === 1 ? "" : "s"
+            }:`,
+            ...notExecutableTodos.map((t) => `- ${t.todoId}: ${t.error}`),
+          ].join("\n"),
         },
       ],
       details: {
@@ -94,27 +95,29 @@ export function executeWriteTodo(
       })
     );
 
+    const successfulUpdatedTodos = updatedTodos
+      .filter((r) => r.isOk())
+      .map((r) => r.value);
+    const contentLines = [
+      `Wrote ${createdTodos.length + successfulUpdatedTodos.length} todos`,
+      `Created: ${createdTodos.length}`,
+      ...createdTodos.map((t) => `- ${t.id}: ${t.title}`),
+      `Updated: ${successfulUpdatedTodos.length}`,
+      ...successfulUpdatedTodos.map((t) => `- ${t.id}: ${t.title}`),
+    ];
+
     return {
       content: [
         {
           type: "text",
-          text: `
-                  Created ${createdTodos.length} todos:\n
-                  ${createdTodos.map((t) => `- ${t.id}: ${t.title}`).join("\n")}
-                  \n
-                  Updated ${updatedTodos.length} todos:\n
-                   ${updatedTodos
-                     .filter((r) => r.isOk())
-                     .map((r) => `- ${r.value.id}: ${r.value.title}`)
-                     .join("\n")}
-                   `,
+          text: contentLines.join("\n"),
         },
       ],
       details: {
         success: true,
         action: "write",
         createdTodos,
-        updatedTodos: updatedTodos.filter((r) => r.isOk()).map((r) => r.value),
+        updatedTodos: successfulUpdatedTodos,
       },
     };
   }

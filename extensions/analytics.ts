@@ -18,14 +18,16 @@ type AnalyticsEvent = z.infer<typeof analyticsEventSchema>;
 const analyticsDataSchema = z.array(analyticsEventSchema);
 
 async function useAnalyticsStore(sessionId: string) {
-  const identifier = sessionId;
-  const usageDataFilePath = path.join(
+  const analyticsDir = path.join(
     homedir(),
     ".pi",
+    "agent",
     "data",
-    "analytics",
-    `${identifier}.json`
+    "analytics"
   );
+
+  const identifier = sessionId;
+  const usageDataFilePath = path.join(analyticsDir, `${identifier}.json`);
 
   async function loadExistingEvents(): Promise<AnalyticsEvent[]> {
     if (existsSync(usageDataFilePath)) {
@@ -61,7 +63,6 @@ async function useAnalyticsStore(sessionId: string) {
   }
 
   async function loadAllEvents(): Promise<AnalyticsEvent[]> {
-    const analyticsDir = path.join(homedir(), ".pi", "data", "analytics");
     if (existsSync(analyticsDir)) {
       const filePaths = await readdir(analyticsDir);
       const fileContents = await Promise.all(

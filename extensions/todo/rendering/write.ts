@@ -1,43 +1,24 @@
 import { Static } from "typebox";
 import { WriteTodosReturnDetails, writeTodosSchema } from "../tools/write";
-import { Text } from "@earendil-works/pi-tui";
 import { Theme } from "@earendil-works/pi-coding-agent";
+import {
+  countBadge,
+  formatError,
+  plural,
+  shortText,
+  textComponent,
+  TodoRenderContext,
+} from "./common";
 
-type TodoRenderContext = {
-  isPartial: boolean;
-  expanded?: boolean;
-  lastComponent?: unknown;
-};
-
-function plural(count: number, singular: string, pluralForm = `${singular}s`) {
-  return `${count} ${count === 1 ? singular : pluralForm}`;
-}
-
-function countBadge(
-  theme: Theme,
-  count: number,
-  label: string,
-  color: "success" | "accent" | "muted" = "muted"
-) {
-  return `${theme.fg(color, String(count))} ${theme.fg("dim", label)}`;
-}
-
-function formatError(error: string) {
-  return error.replace(/-/g, " ");
-}
-
-function shortDescription(description: string) {
-  const normalized = description.replace(/\s+/g, " ").trim();
-  return normalized.length > 96 ? `${normalized.slice(0, 95)}…` : normalized;
-}
+type RenderableTodo = { id: string; title: string; description: string };
 
 function todoRows(
-  todos: Array<{ id: string; title: string; description: string }>,
+  todos: RenderableTodo[],
   theme: Theme,
   marker: string,
   expanded = false
 ) {
-  return todos.flatMap((todo, index) => {
+  return todos.flatMap((todo) => {
     const lines = [
       `${theme.fg("muted", "│")} ${theme.fg("success", marker)} ${theme.bold(
         todo.title
@@ -48,7 +29,7 @@ function todoRows(
       lines.push(
         `${theme.fg("muted", "│")}   ${theme.fg(
           "muted",
-          shortDescription(todo.description)
+          shortText(todo.description)
         )}`
       );
     }
@@ -60,7 +41,7 @@ function todoRows(
 function todoSection(
   theme: Theme,
   title: string,
-  todos: Array<{ id: string; title: string; description: string }>,
+  todos: RenderableTodo[],
   marker: string,
   expanded = false
 ) {
@@ -84,10 +65,7 @@ export function renderWriteTodoCall(
   theme: Theme,
   context: TodoRenderContext
 ) {
-  const text =
-    context.lastComponent instanceof Text
-      ? context.lastComponent
-      : new Text("", 0, 0);
+  const text = textComponent(context);
   if (!context.isPartial) {
     text.setText("");
     return text;
@@ -116,10 +94,7 @@ export function renderWriteTodoResult(
   theme: Theme,
   context?: TodoRenderContext
 ) {
-  const component =
-    context?.lastComponent instanceof Text
-      ? context.lastComponent
-      : new Text("", 0, 0);
+  const component = textComponent(context);
 
   if (result.success) {
     const total = result.createdTodos.length + result.updatedTodos.length;
@@ -151,24 +126,23 @@ export function renderWriteTodoResult(
 
     component.setText(lines.join("\n"));
     return component;
-  } else {
-    const lines = [
-      `${theme.fg("error", "✗")} ${theme.bold("Could not write todos")}`,
-      `  ${theme.fg(
-        "error",
-        String(result.notExecutableTodos.length)
-      )} ${theme.fg("dim", "issue(s)")}`,
-      ``,
-      ...result.notExecutableTodos.map(
-        (todo) =>
-          `${theme.fg("muted", "│")} ${theme.fg(
-            "error",
-            "!"
-          )} ${theme.bold(todo.todoId)} ${theme.fg("muted", formatError(todo.error))}`
-      ),
-    ];
-
-    component.setText(lines.join("\n"));
-    return component;
   }
+
+  const lines = [
+    `${theme.fg("error", "✗")} ${theme.bold("Could not write todos")}`,
+    `  ${theme.fg("error", String(result.notExecutableTodos.length))} ${theme.fg(
+      "dim",
+      "issue(s)"
+    )}`,
+    ``,
+    ...result.notExecutableTodos.map(
+      (todo) =>
+        `${theme.fg("muted", "│")} ${theme.fg("error", "!")} ${theme.bold(
+          todo.todoId
+        )} ${theme.fg("muted", formatError(todo.error))}`
+    ),
+  ];
+
+  component.setText(lines.join("\n"));
+  return component;
 }

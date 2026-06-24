@@ -1,47 +1,29 @@
 import { Static } from "typebox";
 import { Theme } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
 import { AbortTodoReturnDetails, abortTodoSchema } from "../tools/abort";
-
-type TodoRenderContext = {
-  isPartial: boolean;
-  lastComponent?: unknown;
-};
-
-function formatError(error: string) {
-  return error.replace(/-/g, " ");
-}
-
-function shortText(text: string, max = 96) {
-  const normalized = text.replace(/\s+/g, " ").trim();
-  return normalized.length > max
-    ? `${normalized.slice(0, max - 1)}…`
-    : normalized;
-}
+import {
+  formatError,
+  mutedDetail,
+  renderPartialLine,
+  textComponent,
+  todoId,
+  todoSummary,
+  TodoRenderContext,
+} from "./common";
 
 export function renderAbortTodoCall(
   args: Static<typeof abortTodoSchema>,
   theme: Theme,
   context: TodoRenderContext
 ) {
-  const text =
-    context.lastComponent instanceof Text
-      ? context.lastComponent
-      : new Text("", 0, 0);
-
-  if (!context.isPartial) {
-    text.setText("");
-    return text;
-  }
-
-  text.setText(
-    `${theme.fg("warning", "◷")} ${theme.bold("Aborting")} ${theme.fg(
-      "dim",
-      `#${args.todoId}`
-    )}`
+  return renderPartialLine(
+    theme,
+    context,
+    "◷",
+    "Aborting",
+    args.todoId,
+    "warning"
   );
-
-  return text;
 }
 
 export function renderAbortTodoResult(
@@ -49,16 +31,13 @@ export function renderAbortTodoResult(
   theme: Theme,
   context?: TodoRenderContext
 ) {
-  const component =
-    context?.lastComponent instanceof Text
-      ? context.lastComponent
-      : new Text("", 0, 0);
+  const component = textComponent(context);
 
   if (!result.success) {
     component.setText(
-      `${theme.fg("error", "✗")} ${theme.bold("Could not abort")} ${theme.fg(
-        "dim",
-        `#${result.todoId}`
+      `${theme.fg("error", "✗")} ${theme.bold("Could not abort")} ${todoId(
+        theme,
+        result.todoId
       )} ${theme.fg("muted", formatError(result.error))}`
     );
     return component;
@@ -67,11 +46,9 @@ export function renderAbortTodoResult(
   const todo = result.todo;
   component.setText(
     [
-      `${theme.fg("error", "✗")} ${theme.bold("Aborted Todo:")} ${theme.bold(
-        todo.title
-      )} - ${theme.fg("dim", `#${todo.id}`)}`,
+      todoSummary(theme, todo),
       ...(todo.abortJustification
-        ? [`  ${theme.fg("muted", shortText(todo.abortJustification))}`]
+        ? [mutedDetail(theme, todo.abortJustification)]
         : []),
     ].join("\n")
   );

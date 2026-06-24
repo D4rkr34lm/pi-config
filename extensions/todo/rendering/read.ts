@@ -1,62 +1,23 @@
 import { Static } from "typebox";
 import { Theme } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
 import { Todo } from "../store";
 import { ReadTodosReturnDetails, readTodosSchema } from "../tools/read";
-
-type TodoRenderContext = {
-  isPartial: boolean;
-  expanded?: boolean;
-  lastComponent?: unknown;
-};
+import {
+  countBadge,
+  formatError,
+  mutedDetail,
+  plural,
+  renderPartialLine,
+  shortText,
+  textComponent,
+  todoSummary,
+  TodoRenderContext,
+} from "./common";
 
 const COLLAPSED_TODO_LIMIT = 20;
 
-function plural(count: number, singular: string, pluralForm = `${singular}s`) {
-  return `${count} ${count === 1 ? singular : pluralForm}`;
-}
-
-function countBadge(theme: Theme, count: number, label: string) {
-  return `${theme.fg("accent", String(count))} ${theme.fg("dim", label)}`;
-}
-
-function shortText(text: string, max = 96) {
-  const normalized = text.replace(/\s+/g, " ").trim();
-  return normalized.length > max
-    ? `${normalized.slice(0, max - 1)}…`
-    : normalized;
-}
-
-function statusIcon(todo: Todo, theme: Theme) {
-  switch (todo.status) {
-    case "completed":
-      return theme.fg("success", "✓");
-    case "aborted":
-      return theme.fg("error", "✗");
-    case "pending":
-      return theme.fg("accent", "☐");
-  }
-}
-
-function statusLabel(todo: Todo) {
-  switch (todo.status) {
-    case "completed":
-      return "Completed";
-    case "aborted":
-      return "Aborted";
-    case "pending":
-      return "Open";
-  }
-}
-
-function todoSummary(todo: Todo, theme: Theme) {
-  return `${statusIcon(todo, theme)} ${theme.bold(`${statusLabel(todo)} Todo:`)} ${theme.bold(
-    todo.title
-  )} - ${theme.fg("dim", `#${todo.id}`)}`;
-}
-
 function todoLine(todo: Todo, theme: Theme) {
-  return `${theme.fg("muted", "│")} ${todoSummary(todo, theme)}`;
+  return `${theme.fg("muted", "│")} ${todoSummary(theme, todo)}`;
 }
 
 function todoRows(todos: Todo[], theme: Theme, expanded = false) {
@@ -67,18 +28,15 @@ function todoRows(todos: Todo[], theme: Theme, expanded = false) {
 
     if (expanded && todo.description.trim()) {
       lines.push(
-        `${theme.fg("muted", "│")}   ${theme.fg(
-          "muted",
-          shortText(todo.description)
-        )}`
+        `${theme.fg("muted", "│")} ${mutedDetail(theme, todo.description)}`
       );
     }
 
     if (expanded && todo.abortJustification?.trim()) {
       lines.push(
-        `${theme.fg("muted", "│")}   ${theme.fg(
-          "error",
-          `aborted: ${shortText(todo.abortJustification)}`
+        `${theme.fg("muted", "│")} ${mutedDetail(
+          theme,
+          `reason: ${shortText(todo.abortJustification)}`
         )}`
       );
     }
@@ -121,26 +79,9 @@ export function renderReadTodoCall(
   theme: Theme,
   context: TodoRenderContext
 ) {
-  const text =
-    context.lastComponent instanceof Text
-      ? context.lastComponent
-      : new Text("", 0, 0);
-
-  if (!context.isPartial) {
-    text.setText("");
-    return text;
-  }
-
-  text.setText(
-    args.todoId
-      ? `${theme.fg("accent", "◷")} ${theme.bold("Reading todo")} ${theme.fg(
-          "dim",
-          `#${args.todoId}`
-        )}`
-      : `${theme.fg("accent", "◷")} ${theme.bold("Reading open todos")}`
-  );
-
-  return text;
+  return args.todoId
+    ? renderPartialLine(theme, context, "◷", "Reading", args.todoId)
+    : renderPartialLine(theme, context, "◷", "Reading open todos");
 }
 
 export function renderReadTodoResult(
@@ -148,22 +89,14 @@ export function renderReadTodoResult(
   theme: Theme,
   context?: TodoRenderContext
 ) {
-  const component =
-    context?.lastComponent instanceof Text
-      ? context.lastComponent
-      : new Text("", 0, 0);
+  const component = textComponent(context);
 
   if (!result.success) {
     component.setText(
-      [
-        `${theme.fg("error", "✗")} ${theme.bold("Todo not found")}`,
-        `${theme.fg("muted", "╭─")} ${theme.bold("Error")}`,
-        `${theme.fg("muted", "│")} ${theme.fg(
-          "muted",
-          result.error.replace(/-/g, " ")
-        )}`,
-        `${theme.fg("muted", "╰─")}`,
-      ].join("\n")
+      `${theme.fg("error", "✗")} ${theme.bold("Todo not found")} ${theme.fg(
+        "muted",
+        formatError(result.error)
+      )}`
     );
     return component;
   }
@@ -171,14 +104,12 @@ export function renderReadTodoResult(
   if ("todo" in result) {
     const todo = result.todo;
     const lines = [
-      todoSummary(todo, theme),
+      todoSummary(theme, todo),
       ...(todo.description.trim()
-        ? [`  ${theme.fg("muted", shortText(todo.description))}`]
+        ? [mutedDetail(theme, todo.description)]
         : []),
       ...(todo.abortJustification?.trim()
-        ? [
-            `  ${theme.fg("muted", `reason: ${shortText(todo.abortJustification)}`)}`,
-          ]
+        ? [mutedDetail(theme, `reason: ${todo.abortJustification}`)]
         : []),
     ];
 
@@ -191,7 +122,7 @@ export function renderReadTodoResult(
     `${theme.fg("success", "✓")} ${theme.bold(
       `Read ${plural(todos.length, "open todo")}`
     )}`,
-    `  ${countBadge(theme, todos.length, "pending")}`,
+    `  ${countBadge(theme, todos.length, "pending", "accent")}`,
     ``,
     ...todoListSection(theme, "Open", todos, context?.expanded),
   ];

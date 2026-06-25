@@ -1,0 +1,12 @@
+{
+  "watchdog": {
+    "workspaceBoundary": {
+      "enforce": false,
+      "allowedFiles": []
+    },
+    "forbiddenFiles": [
+      ".env",
+      "auth.json"
+    ]
+  }
+}

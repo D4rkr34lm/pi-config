@@ -11,12 +11,33 @@ export const extensionSettingsFilePath = path.join(
 );
 
 export const extensionSettingDefinitions = {
-  analytics: {
+  watchdog: {
     schema: Type.Object({
-      enabled: Type.Boolean(),
+      workspaceBoundary: Type.Object({
+        enforce: Type.Boolean({
+          description:
+            "If true, the watchdog will enforce workspace boundaries for all tools.",
+        }),
+        allowedFiles: Type.Array(
+          Type.String({
+            description:
+              "A list of files globs that the watchdog will allow the agent to access.",
+          })
+        ),
+      }),
+      forbiddenFiles: Type.Array(
+        Type.String({
+          description:
+            "A list of files globs that the watchdog will attempt to prevent the agent from accessing.",
+        })
+      ),
     }),
     default: () => ({
-      enabled: true,
+      workspaceBoundary: {
+        enforce: true,
+        allowedFiles: [],
+      },
+      forbiddenFiles: [".env", "auth.json"],
     }),
   },
 } as const satisfies ExtensionSettingsSchemaMap;

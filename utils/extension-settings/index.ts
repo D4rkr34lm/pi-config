@@ -3,12 +3,11 @@ import {
   extensionSettingDefinitions,
   extensionSettingsFilePath,
 } from "./definition";
-import { Parse } from "typebox/schema";
-import { Static } from "typebox/type";
+import { Parse } from "typebox/value";
+import Type, { type Static } from "typebox";
 import { mkdir, readFile, rename, writeFile } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
-import Type from "typebox";
 import { err, ok, Result } from "neverthrow";
 
 export type ExtensionId = keyof typeof extensionSettingDefinitions;
@@ -73,7 +72,7 @@ async function readSettingsFile(): Promise<RawExtensionSettingsFile> {
   }
 }
 
-export async function getExtensionSettings<TExtensionId extends ExtensionId>(
+export async function loadExtensionSettings<TExtensionId extends ExtensionId>(
   extensionId: TExtensionId
 ): Promise<ExtensionSettings<TExtensionId>> {
   const settings = await readSettingsFile();

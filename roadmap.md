@@ -38,6 +38,7 @@ Give the agent tools to manage a divide and conquer strategy for tasks that are 
 - [X] Agent can mark a todo as `done` or `aborted`
 - [ ] Agent can list all todos
 - [X] Agent can list all `open` todos
+- [ ] Todo completion invokes a verification step (toggle-able).
 
 ### Watchdog
 
@@ -50,6 +51,13 @@ Some files should never be read by the model. Some commands are way to dangerous
 - [ ] write on protected files is denied
 - [ ] edit on protected files is denied
 - [ ] every command is first looked at by an assessor model. Generating a short summary and classifies the command as `safe` or `unsafe`. If `unsafe`, the user is asked wether they want to execute the command or not. If `safe`, the command is executed.
+
+### Subagents
+
+Status: `not implemented`\
+Version: `1.0.0`
+
+Some tasks do not really require an agent to have all the outputs/sub-steps within its context window. For such cases it would be very helpful to have subagents that can be manually invoked or invoked by the model. The extension is only a enabler. The actual subagents should be define-able in `/subagents` 
 
 ## Template Prompts
 

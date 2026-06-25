@@ -5,3 +5,7 @@
 - removed bloated prompt templates
 - add analytics extension to track user interactions, tool calling & skill usage
 - improved todo tool
+
+## 2026-06-25
+
+- add extension settings utils

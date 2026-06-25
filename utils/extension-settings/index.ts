@@ -9,6 +9,7 @@ import { mkdir, readFile, rename, writeFile } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
 import Type from "typebox";
+import { err, ok, Result } from "neverthrow";
 
 export type ExtensionId = keyof typeof extensionSettingDefinitions;
 type ExtensionSettingSchema<TExtensionId extends ExtensionId> =
@@ -16,28 +17,35 @@ type ExtensionSettingSchema<TExtensionId extends ExtensionId> =
 export type ExtensionSettings<TExtensionId extends ExtensionId> = Static<
   ExtensionSettingSchema<TExtensionId>
 >;
-type ExtensionSettingsFile = Partial<{
-  [TExtensionId in ExtensionId]: ExtensionSettings<TExtensionId>;
-}>;
 
 const rawExtensionSettingsFileSchema = Type.Record(
   Type.String(),
   Type.Unknown()
 );
-type RawExtensionSettingsFile = Static<typeof rawExtensionSettingsFileSchema>;
+type RawExtensionSettingsFile = Record<string, unknown>;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 function parseExtensionSettings<TExtensionId extends ExtensionId>(
   extensionId: TExtensionId,
   value: unknown
-): ExtensionSettings<TExtensionId> {
-  return Parse(
-    extensionSettingDefinitions[extensionId].schema,
-    value
-  ) as ExtensionSettings<TExtensionId>;
+): Result<ExtensionSettings<TExtensionId>, "invalid"> {
+  try {
+    const parsedSchema = Parse(
+      extensionSettingDefinitions[extensionId].schema,
+      value
+    ) as ExtensionSettings<TExtensionId>;
+
+    return ok(parsedSchema);
+  } catch {
+    return err("invalid");
+  }
 }
 
 async function writeSettingsFile(
-  settings: ExtensionSettingsFile
+  settings: RawExtensionSettingsFile
 ): Promise<void> {
   await mkdir(path.dirname(extensionSettingsFilePath), { recursive: true });
 
@@ -59,7 +67,7 @@ async function readSettingsFile(): Promise<RawExtensionSettingsFile> {
     return Parse(
       rawExtensionSettingsFileSchema,
       JSON.parse(settingsFileContent)
-    );
+    ) as RawExtensionSettingsFile;
   } catch {
     return {};
   }
@@ -73,21 +81,46 @@ export async function getExtensionSettings<TExtensionId extends ExtensionId>(
   const hasExtensionSettings = has(settings, extensionId);
 
   if (hasExtensionSettings) {
-    try {
-      return parseExtensionSettings(extensionId, settings[extensionId]);
-    } catch {
-      // Fall through and replace only this extension's invalid settings.
+    const parsedSettingsResult = parseExtensionSettings(
+      extensionId,
+      settings[extensionId]
+    );
+
+    if (parsedSettingsResult.isOk()) {
+      return parsedSettingsResult.value;
     }
+
+    const existingSettings = settings[extensionId];
+    const defaultSettings = settingDefinition.default();
+    const mergedSettings = isRecord(existingSettings)
+      ? {
+          ...defaultSettings,
+          ...existingSettings,
+        }
+      : defaultSettings;
+
+    const parsedMergedSettingsResult = parseExtensionSettings(
+      extensionId,
+      mergedSettings
+    );
+
+    if (parsedMergedSettingsResult.isOk()) {
+      await writeSettingsFile({
+        ...settings,
+        [extensionId]: parsedMergedSettingsResult.value,
+      });
+
+      return parsedMergedSettingsResult.value;
+    } else {
+      return settingDefinition.default() as ExtensionSettings<TExtensionId>;
+    }
+  } else {
+    const defaultSettings = settingDefinition.default();
+    await writeSettingsFile({
+      ...settings,
+      [extensionId]: defaultSettings,
+    });
+
+    return defaultSettings as ExtensionSettings<TExtensionId>;
   }
-
-  const parsedDefaultSettings = parseExtensionSettings(
-    extensionId,
-    settingDefinition.default()
-  );
-  await writeSettingsFile({
-    ...settings,
-    [extensionId]: parsedDefaultSettings,
-  });
-
-  return parsedDefaultSettings;
 }

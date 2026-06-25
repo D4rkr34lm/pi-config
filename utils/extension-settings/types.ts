@@ -1,11 +1,11 @@
-import { TSchema, Static } from "typebox";
+import { TObject, Static } from "typebox";
 
-export type ExtensionSettingDefinition<TSettingSchema extends TSchema> = {
+export type ExtensionSettingDefinition<TSettingSchema extends TObject> = {
   schema: TSettingSchema;
   default: () => Static<TSettingSchema>;
 };
 
 export type ExtensionSettingsSchemaMap = Record<
   string,
-  ExtensionSettingDefinition<TSchema>
+  ExtensionSettingDefinition<TObject>
 >;

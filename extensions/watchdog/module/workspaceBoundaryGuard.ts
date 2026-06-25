@@ -1,4 +1,7 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 import { getToolTargetPaths } from "../utils/toolTargetPaths";
 import { formatPathViolation } from "../utils/pathViolation";
 import { findFirstWorkspaceBoundaryViolation } from "../utils/workspaceBoundary";

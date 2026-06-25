@@ -1,4 +1,7 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 import { getToolTargetPaths } from "../utils/toolTargetPaths";
 import { findFirstForbiddenFileViolation } from "../utils/forbiddenFiles";
 import { formatPathViolation } from "../utils/pathViolation";

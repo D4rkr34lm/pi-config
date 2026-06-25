@@ -1,4 +1,7 @@
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+} from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import type { ExtensionSettings } from "../../../utils/extension-settings";
 
@@ -11,10 +14,10 @@ type WatchdogStatusState = {
 };
 
 const formatForbiddenFiles = (forbiddenFiles: string[]): string => {
-  if (forbiddenFiles.length === 0) return "forbidden:off";
+  if (forbiddenFiles.length === 0) return "forbidden: -";
 
-  return `forbidden:${truncateToWidth(
-    forbiddenFiles.join(","),
+  return `forbidden: ${truncateToWidth(
+    forbiddenFiles.join(", "),
     FORBIDDEN_FILES_MAX_WIDTH,
     "…"
   )}`;
@@ -29,14 +32,14 @@ const renderWatchdogStatus = (
   const dim = (text: string): string => theme.fg("dim", text);
   const workspace = settings.workspaceBoundary.enforce
     ? dim("workspace")
-    : `${dim("workspace:")}${theme.fg("error", "off")}`;
+    : `${dim("workspace - ")}${theme.fg("error", "off")}`;
   const sections = [
     dim("watchdog"),
     workspace,
     dim(formatForbiddenFiles(settings.forbiddenFiles)),
   ];
 
-  if (state.blocked > 0) sections.push(dim(`blocked:${state.blocked}`));
+  if (state.blocked > 0) sections.push(dim(`blocked - ${state.blocked}`));
 
   return sections.join(dim(SECTION_SEPARATOR));
 };

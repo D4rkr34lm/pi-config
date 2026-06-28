@@ -75,6 +75,13 @@ Version: `1.0.0`
 
 For the model to keep up with ever-changing docs, having web access could be nice.
 
+### Prompt snippets
+
+Status: `not implemented`\
+Version: `1.0.0`
+
+Oftentimes i find myself adding the same sentences to the prompt. To make this fast and more consistent, having a less powerful, but fully integrable at any prompt position would be good. A syntax like `Find bug X and tell me how it works, #ne` with `#ne` being unwrapped to `Make no edits yet`.
+
 ## Template Prompts
 
 ### Review

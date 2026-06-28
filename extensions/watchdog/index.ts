@@ -6,12 +6,19 @@ import { mountWatchdogStatus } from "./module/status";
 
 export default async function (pi: ExtensionAPI): Promise<void> {
   const settings = await loadExtensionSettings("watchdog");
-  const status = mountWatchdogStatus(pi, settings);
+  const containerized = process.env.PI_CONTAINERIZED === "true"
+  
+  const status = mountWatchdogStatus(pi, {
+    ...settings,
+    containerized,
+  });
 
   mountForbiddenFilesGuard(pi, settings.forbiddenFiles, status.markBlocked);
-  mountWorkspaceBoundaryGuard(
+  if(!containerized) {
+    mountWorkspaceBoundaryGuard(
     pi,
     settings.workspaceBoundary,
     status.markBlocked
   );
+  }
 }

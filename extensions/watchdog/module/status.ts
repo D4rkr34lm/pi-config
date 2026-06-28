@@ -4,6 +4,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import type { ExtensionSettings } from "../../../utils/extension-settings";
+import { hasValue } from "../../../utils/type-guards";
 
 const STATUS_KEY = "watchdog";
 const SECTION_SEPARATOR = " • ";
@@ -25,7 +26,7 @@ const formatForbiddenFiles = (forbiddenFiles: string[]): string => {
 
 const renderWatchdogStatus = (
   ctx: ExtensionContext,
-  settings: ExtensionSettings<"watchdog">,
+  settings: WatchdogStatusSettings,
   state: WatchdogStatusState
 ): string => {
   const theme = ctx.ui.theme;
@@ -33,11 +34,16 @@ const renderWatchdogStatus = (
   const workspace = settings.workspaceBoundary.enforce
     ? dim("workspace")
     : `${dim("workspace - ")}${theme.fg("error", "off")}`;
+  const containerized = settings.containerized
+    ? dim("containerized")
+    : `${dim("containerized - ")}${theme.fg("error", "off")}`;
+  
   const sections = [
     dim("watchdog"),
-    workspace,
+    settings.containerized ? null : workspace,
+    containerized,
     dim(formatForbiddenFiles(settings.forbiddenFiles)),
-  ];
+  ].filter(hasValue);
 
   if (state.blocked > 0) sections.push(dim(`blocked - ${state.blocked}`));
 
@@ -48,9 +54,11 @@ export type WatchdogStatusController = {
   markBlocked: (ctx: ExtensionContext) => void;
 };
 
+export type WatchdogStatusSettings = ExtensionSettings<"watchdog"> & { containerized: boolean };
+
 export function mountWatchdogStatus(
   pi: ExtensionAPI,
-  settings: ExtensionSettings<"watchdog">
+  settings: WatchdogStatusSettings
 ): WatchdogStatusController {
   const state: WatchdogStatusState = { blocked: 0 };
 

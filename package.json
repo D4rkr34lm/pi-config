@@ -3,9 +3,11 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "test": "node --experimental-strip-types --test tests/*.test.mjs"
+    "build-sandbox": "docker build -t pi-sandbox .",
+    "setup-sandbox": "npm run build-sandbox && powershell -ExecutionPolicy Bypass -File ./setup-pi-s-windows.ps1"
   },
   "devDependencies": {
+    "@types/node": "26.0.1",
     "@eslint/js": "10.0.1",
     "@eslint/markdown": "8.0.2",
     "@types/lodash-es": "4.17.12",

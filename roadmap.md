@@ -42,7 +42,7 @@ Give the agent tools to manage a divide and conquer strategy for tasks that are 
 
 ### Watchdog
 
-Status: `not implemented`\
+Status: `implemented`\
 Version: `1.0.0`
 
 Some files should never be read by the model. Some commands are way to dangerous to just execute as is. Watchdog must therefore enforce access restrictions and check commands before execution. While I am aware that only isolation brings real security, this is a first step to prevent accidental damage and allow for a more safeguarded usage when true isolation is not available.
@@ -59,6 +59,8 @@ Status: `not implemented`\
 Version: `1.0.0`
 
 Some tasks do not really require an agent to have all the outputs/sub-steps within its context window. For such cases it would be very helpful to have subagents that can be manually invoked or invoked by the model. The extension is only a enabler. The actual subagents should be define-able in `/subagents` 
+
+### Postures
 
 ## Template Prompts
 

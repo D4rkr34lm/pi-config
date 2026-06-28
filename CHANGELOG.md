@@ -11,3 +11,7 @@
 - add extension settings utils
 - add custom declarative footer
 - add watchdog for heuristically protecting workspace boundaries and sensitive files
+
+## 2026-06-28
+
+- add dockerisation and detection within watchdog

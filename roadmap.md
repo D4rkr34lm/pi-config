@@ -51,6 +51,7 @@ Some files should never be read by the model. Some commands are way to dangerous
 - [x] write on protected files is denied
 - [x] edit on protected files is denied
 - [x] shell command are heuristically checked for forbidden paths 
+- [x] can be started within docker container to separate host from agent fs
 - [ ] every command is first looked at by an assessor model. Generating a short summary and classifies the command as `safe` or `unsafe`. If `unsafe`, the user is asked wether they want to execute the command or not. If `safe`, the command is executed.
 
 ### Subagents
@@ -60,7 +61,19 @@ Version: `1.0.0`
 
 Some tasks do not really require an agent to have all the outputs/sub-steps within its context window. For such cases it would be very helpful to have subagents that can be manually invoked or invoked by the model. The extension is only a enabler. The actual subagents should be define-able in `/subagents` 
 
-### Postures
+### Browser
+
+Status: `not implemented`\
+Version: `1.0.0`
+
+To test changes on web apps directly, giving the agent browser access could be a good idea. Vercel's agent browser comes to mind here
+
+### Web
+
+Status: `not implemented`\
+Version: `1.0.0`
+
+For the model to keep up with ever-changing docs, having web access could be nice.
 
 ## Template Prompts
 

@@ -1,15 +1,30 @@
 import type { AssistantMessage } from "@earendil-works/pi-ai";
-import type {
-  ExtensionAPI,
-  ExtensionContext,
-  ReadonlyFooterDataProvider,
-  Theme,
+import {
+  buildSessionContext,
+  type ExtensionAPI,
+  type ExtensionContext,
+  type ReadonlyFooterDataProvider,
+  type Theme,
 } from "@earendil-works/pi-coding-agent";
 import type { Component, TUI } from "@earendil-works/pi-tui";
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import { isAbsolute, relative, resolve, sep } from "node:path";
 
 const MIN_RIGHT_PADDING = 2;
+const ESTIMATED_IMAGE_CHARS = 4800;
+
+const CONTEXT_BREAKDOWN_KEYS = [
+  "system",
+  "toolDefinitions",
+  "user",
+  "assistant",
+  "reasoning",
+  "toolCalls",
+  "toolResults",
+  "summaries",
+  "custom",
+  "bash",
+] as const;
 
 type FooterSnapshot = {
   ctx: ExtensionContext;
@@ -31,10 +46,26 @@ type FooterUsage = {
 };
 
 type FooterContextUsage = {
+  tokens: number | null;
   percentDisplay: string;
   percentValue: number;
   contextWindow: number;
+  breakdown: ContextBreakdown;
 };
+
+type ContextBreakdownKey = (typeof CONTEXT_BREAKDOWN_KEYS)[number];
+
+type ContextBreakdown = Record<ContextBreakdownKey, number>;
+
+type ContentBlock = {
+  type: string;
+  text?: string;
+  thinking?: string;
+  name?: string;
+  arguments?: unknown;
+};
+
+type TextAndImageContent = string | ContentBlock[];
 
 type FooterToken = {
   id: string;
@@ -76,6 +107,172 @@ const formatTokens = (count: number): string => {
   if (count < 10000000) return `${(count / 1000000).toFixed(1)}M`;
   return `${Math.round(count / 1000000)}M`;
 };
+
+const tokensFromChars = (chars: number): number => Math.ceil(chars / 4);
+
+const emptyContextBreakdown = (): ContextBreakdown =>
+  Object.fromEntries(
+    CONTEXT_BREAKDOWN_KEYS.map((key) => [key, 0])
+  ) as ContextBreakdown;
+
+const contextBreakdownWith = (
+  key: ContextBreakdownKey,
+  chars: number
+): ContextBreakdown => ({ ...emptyContextBreakdown(), [key]: chars });
+
+const mergeContextBreakdowns = (
+  breakdowns: ContextBreakdown[]
+): ContextBreakdown =>
+  Object.fromEntries(
+    CONTEXT_BREAKDOWN_KEYS.map((key) => [
+      key,
+      breakdowns.reduce((total, breakdown) => total + breakdown[key], 0),
+    ])
+  ) as ContextBreakdown;
+
+const tokenizedContextBreakdown = (
+  breakdown: ContextBreakdown
+): ContextBreakdown =>
+  Object.fromEntries(
+    CONTEXT_BREAKDOWN_KEYS.map((key) => [key, tokensFromChars(breakdown[key])])
+  ) as ContextBreakdown;
+
+const totalContextBreakdownTokens = (breakdown: ContextBreakdown): number =>
+  CONTEXT_BREAKDOWN_KEYS.reduce((total, key) => total + breakdown[key], 0);
+
+const normalizeContextBreakdown = (
+  breakdown: ContextBreakdown,
+  targetTotal: number | null
+): ContextBreakdown => {
+  const sourceTotal = totalContextBreakdownTokens(breakdown);
+  if (targetTotal === null || sourceTotal <= 0) return breakdown;
+
+  const scaled = CONTEXT_BREAKDOWN_KEYS.map((key) => {
+    const exact = (breakdown[key] / sourceTotal) * targetTotal;
+    return { key, base: Math.floor(exact), fraction: exact % 1 };
+  });
+  const baseTotal = scaled.reduce((total, part) => total + part.base, 0);
+  const incrementedKeys = new Set(
+    [...scaled]
+      .sort((a, b) => b.fraction - a.fraction)
+      .slice(0, targetTotal - baseTotal)
+      .map((part) => part.key)
+  );
+
+  return Object.fromEntries(
+    scaled.map((part) => [
+      part.key,
+      part.base + (incrementedKeys.has(part.key) ? 1 : 0),
+    ])
+  ) as ContextBreakdown;
+};
+
+const safeJsonLength = (value: unknown): number => {
+  try {
+    return JSON.stringify(value)?.length ?? 0;
+  } catch {
+    return 0;
+  }
+};
+
+const estimateTextAndImageContentChars = (
+  content: TextAndImageContent
+): number =>
+  typeof content === "string"
+    ? content.length
+    : content.reduce(
+        (total, block) =>
+          total +
+          (block.type === "text"
+            ? (block.text?.length ?? 0)
+            : block.type === "image"
+              ? ESTIMATED_IMAGE_CHARS
+              : 0),
+        0
+      );
+
+const estimateAssistantContentChars = (
+  content: AssistantMessage["content"]
+): ContextBreakdown =>
+  mergeContextBreakdowns(
+    content.map((block) => {
+      if (block.type === "text")
+        return contextBreakdownWith("assistant", block.text.length);
+      if (block.type === "thinking")
+        return contextBreakdownWith("reasoning", block.thinking.length);
+      return contextBreakdownWith(
+        "toolCalls",
+        block.name.length + safeJsonLength(block.arguments)
+      );
+    })
+  );
+
+const estimateMessageContextChars = (
+  message: ReturnType<typeof buildSessionContext>["messages"][number]
+): ContextBreakdown => {
+  switch (message.role) {
+    case "user":
+      return contextBreakdownWith(
+        "user",
+        estimateTextAndImageContentChars(message.content)
+      );
+    case "assistant":
+      return estimateAssistantContentChars(message.content);
+    case "toolResult":
+      return contextBreakdownWith(
+        "toolResults",
+        estimateTextAndImageContentChars(message.content)
+      );
+    case "custom":
+      return contextBreakdownWith(
+        "custom",
+        estimateTextAndImageContentChars(message.content)
+      );
+    case "bashExecution":
+      return contextBreakdownWith(
+        "bash",
+        message.command.length + message.output.length
+      );
+    case "branchSummary":
+    case "compactionSummary":
+      return contextBreakdownWith("summaries", message.summary.length);
+  }
+
+  return emptyContextBreakdown();
+};
+
+const estimateActiveToolDefinitionChars = (pi: ExtensionAPI): number => {
+  const activeTools = new Set(pi.getActiveTools());
+  return pi
+    .getAllTools()
+    .filter((tool) => activeTools.has(tool.name))
+    .reduce(
+      (total, tool) =>
+        total +
+        tool.name.length +
+        tool.description.length +
+        safeJsonLength(tool.parameters),
+      0
+    );
+};
+
+const collectContextBreakdown = (
+  pi: ExtensionAPI,
+  ctx: ExtensionContext
+): ContextBreakdown =>
+  tokenizedContextBreakdown(
+    mergeContextBreakdowns([
+      contextBreakdownWith("system", ctx.getSystemPrompt().length),
+      contextBreakdownWith(
+        "toolDefinitions",
+        estimateActiveToolDefinitionChars(pi)
+      ),
+      ...buildSessionContext(
+        ctx.sessionManager.getEntries(),
+        ctx.sessionManager.getLeafId()
+      ).messages.map(estimateMessageContextChars),
+    ])
+  );
 
 const formatCwdForFooter = (cwd: string, home: string | undefined): string => {
   if (!home) return cwd;
@@ -129,14 +326,28 @@ const collectUsage = (ctx: ExtensionContext): FooterUsage => {
   return usage;
 };
 
-const collectContextUsage = (ctx: ExtensionContext): FooterContextUsage => {
+const collectContextUsage = (
+  pi: ExtensionAPI,
+  ctx: ExtensionContext
+): FooterContextUsage => {
   const usage = ctx.getContextUsage();
   const contextWindow = usage?.contextWindow ?? ctx.model?.contextWindow ?? 0;
   const percentValue = usage?.percent ?? 0;
   const percentDisplay =
     usage?.percent === null ? "?" : percentValue.toFixed(1);
 
-  return { percentDisplay, percentValue, contextWindow };
+  const tokens = usage?.tokens ?? null;
+
+  return {
+    tokens,
+    percentDisplay,
+    percentValue,
+    contextWindow,
+    breakdown: normalizeContextBreakdown(
+      collectContextBreakdown(pi, ctx),
+      tokens
+    ),
+  };
 };
 
 const renderTokens = (
@@ -279,10 +490,11 @@ const defaultFooterRows: FooterRow[] = [
         id: "context",
         render: ({ context, theme }) => {
           const autoIndicator = " (auto)";
+          const contextWindow = formatTokens(context.contextWindow);
           const value =
-            context.percentDisplay === "?"
-              ? `?/${formatTokens(context.contextWindow)}${autoIndicator}`
-              : `${context.percentDisplay}%/${formatTokens(context.contextWindow)}${autoIndicator}`;
+            context.tokens === null || context.percentDisplay === "?"
+              ? `?/${contextWindow}${autoIndicator}`
+              : `${formatTokens(context.tokens)}/${contextWindow} (${context.percentDisplay}%)${autoIndicator}`;
 
           if (context.percentValue > 90) return theme.fg("error", value);
           if (context.percentValue > 70) return theme.fg("warning", value);
@@ -313,6 +525,42 @@ const defaultFooterRows: FooterRow[] = [
           if (!ctx.model?.reasoning) return undefined;
           const level = pi.getThinkingLevel() || "off";
           return level === "off" ? "thinking off" : level;
+        },
+      },
+    ],
+  },
+  {
+    id: "context-breakdown",
+    kind: "joined",
+    separator: " ",
+    style: ({ theme }, text) => theme.fg("dim", text),
+    includeWhen: ({ context }) =>
+      CONTEXT_BREAKDOWN_KEYS.some((key) => context.breakdown[key] > 0),
+    tokens: [
+      {
+        id: "context-breakdown-parts",
+        render: ({ context }) => {
+          const labels: Record<ContextBreakdownKey, string> = {
+            system: "sys",
+            toolDefinitions: "tools",
+            user: "user",
+            assistant: "asst",
+            reasoning: "think",
+            toolCalls: "calls",
+            toolResults: "results",
+            summaries: "sum",
+            custom: "custom",
+            bash: "bash",
+          };
+          const parts = CONTEXT_BREAKDOWN_KEYS.filter(
+            (key) => context.breakdown[key] > 0
+          )
+            .map(
+              (key) => `${labels[key]} ${formatTokens(context.breakdown[key])}`
+            )
+            .join(" • ");
+
+          return parts ? `ctx: ${parts}` : undefined;
         },
       },
     ],
@@ -367,7 +615,7 @@ class DeclarativeFooter implements Component {
       footerData: this.footerData,
       width,
       usage: collectUsage(this.ctx),
-      context: collectContextUsage(this.ctx),
+      context: collectContextUsage(this.pi, this.ctx),
     };
 
     return this.rows.flatMap((row) =>

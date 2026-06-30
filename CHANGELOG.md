@@ -19,3 +19,4 @@
 ## 2026-06-30
 
 - Improve docker sandbox under windows
+- Add system prompt amendment for code style and workflow guidance

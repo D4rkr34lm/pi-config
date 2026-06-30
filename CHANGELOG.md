@@ -15,3 +15,7 @@
 ## 2026-06-28
 
 - add dockerisation and detection within watchdog
+
+## 2026-06-30
+
+- Improve docker sandbox under windows

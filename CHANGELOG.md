@@ -20,3 +20,7 @@
 
 - Improve docker sandbox under windows
 - Add system prompt amendment for code style and workflow guidance
+
+# 2026-07-05
+
+- Add sandbox-local workspace dependency volumes and project Node/package-manager runtime setup

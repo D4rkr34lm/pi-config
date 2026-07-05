@@ -1,5 +1,11 @@
 # Roadmap
 
+## Current issues
+
+- Produced code is not weaved into existing code where sensible
+- There are a lot of unnecessary functions extracted, where inlining would be better
+- Existing stuff is not reused, but rather rewritten
+
 ## Extensions
 
 ### Analytics

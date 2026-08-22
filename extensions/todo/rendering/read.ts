@@ -1,6 +1,6 @@
 import { Static } from "typebox";
 import { Theme } from "@earendil-works/pi-coding-agent";
-import { Todo } from "../store";
+import { Todo } from "../service";
 import { ReadTodosReturnDetails, readTodosSchema } from "../tools/read";
 import {
   countBadge,

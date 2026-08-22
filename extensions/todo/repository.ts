@@ -1,6 +1,6 @@
 import { Parse } from "typebox/value";
 import { SimpleSessionPersistenceApi } from "../../utils/types";
-import { Todo, todoSchema } from "./store";
+import { Todo, todoSchema } from "./service";
 import { hasValue } from "../../utils/type-guards";
 import { groupBy, last, values } from "lodash-es";
 

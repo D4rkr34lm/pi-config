@@ -1,5 +1,5 @@
 import Type, { Static } from "typebox";
-import { Todo, TodoChangeError, TodoStore } from "../store";
+import { Todo, TodoChangeError, TodoStore } from "../service";
 import { AgentToolResult } from "@earendil-works/pi-coding-agent";
 
 export const abortTodoSchema = Type.Object({

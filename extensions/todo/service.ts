@@ -28,7 +28,7 @@ export type TodoChangeError =
   | "todo-already-completed"
   | "todo-already-aborted";
 
-export function useTodoStore(api: SimpleSessionPersistenceApi) {
+export function useTodoService(api: SimpleSessionPersistenceApi) {
   const { writeTodo, readTodos } = useTodoRepository(api);
 
   function listTodos(): Todo[] {
@@ -141,4 +141,4 @@ export function useTodoStore(api: SimpleSessionPersistenceApi) {
   };
 }
 
-export type TodoStore = ReturnType<typeof useTodoStore>;
+export type TodoService = ReturnType<typeof useTodoService>;

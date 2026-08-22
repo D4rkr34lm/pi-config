@@ -1,7 +1,7 @@
 import { isEmpty } from "lodash-es";
 import Type, { Static } from "typebox";
 import { hasNoValue, hasValue } from "../../../utils/type-guards";
-import { Todo, TodoStore } from "../store";
+import { Todo, TodoStore } from "../service";
 import { AgentToolResult } from "@earendil-works/pi-coding-agent";
 
 export const readTodosSchema = Type.Object({

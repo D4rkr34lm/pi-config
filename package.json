@@ -2,10 +2,7 @@
   "name": "@d4rkr34lm/pi-config",
   "version": "0.1.0",
   "type": "module",
-  "scripts": {
-    "build-sandbox": "docker build -t pi-sandbox .",
-    "setup-sandbox": "npm run build-sandbox && powershell -ExecutionPolicy Bypass -File ./setup-pi-s-windows.ps1"
-  },
+  "scripts": {},
   "devDependencies": {
     "@types/node": "26.0.1",
     "@eslint/js": "10.0.1",

@@ -1,6 +1,6 @@
 import { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { useTodoStore } from "./store";
+import { useTodoService } from "./service";
 import {
   executeWriteTodo,
   WriteTodosReturnDetails,
@@ -89,20 +89,20 @@ export default function (pi: ExtensionAPI) {
       }
     },
     execute: async (id, params, signal, onUpdate, ctx) => {
-      const todoStore = useTodoStore({
+      const todoService = useTodoService({
         appendEntry: pi.appendEntry.bind(pi),
         getEntries: ctx.sessionManager.getEntries.bind(ctx.sessionManager),
       });
 
       switch (params.action) {
         case "write":
-          return executeWriteTodo(params, todoStore);
+          return executeWriteTodo(params, todoService);
         case "read":
-          return executeReadTodo(params, todoStore);
+          return executeReadTodo(params, todoService);
         case "complete":
-          return executeCompleteTodo(params, todoStore);
+          return executeCompleteTodo(params, todoService);
         case "abort":
-          return executeAbortTodo(params, todoStore);
+          return executeAbortTodo(params, todoService);
         default:
           return {
             content: [

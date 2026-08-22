@@ -1,6 +1,6 @@
 import { AgentToolResult } from "@earendil-works/pi-coding-agent";
 import Type, { Static } from "typebox";
-import { Todo, TodoStore } from "../store";
+import { Todo, TodoStore } from "../service";
 
 export const completeTodoSchema = Type.Object({
   action: Type.Literal("complete"),

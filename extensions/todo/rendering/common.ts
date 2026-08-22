@@ -1,6 +1,6 @@
 import { Theme } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
-import { Todo, TodoStatus } from "../store";
+import { Todo, TodoStatus } from "../service";
 
 export type TodoRenderContext = {
   isPartial: boolean;

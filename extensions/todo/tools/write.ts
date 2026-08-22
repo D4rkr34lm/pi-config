@@ -1,7 +1,7 @@
 import { Static } from "@earendil-works/pi-ai";
 import Type from "typebox";
 import { hasNoValue, hasValue } from "../../../utils/type-guards";
-import { TodoStore } from "../store";
+import { TodoStore } from "../service";
 import { isEmpty } from "lodash-es";
 import { AgentToolResult } from "@earendil-works/pi-coding-agent";
 

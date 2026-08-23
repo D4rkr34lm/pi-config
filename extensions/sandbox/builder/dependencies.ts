@@ -1,4 +1,4 @@
-import { Dependency } from "./buildSandbox";
+import { Dependency } from "./defineSandbox";
 
 export const node = (args?: {
   npmVersion: string;

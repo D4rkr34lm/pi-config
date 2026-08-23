@@ -10,7 +10,8 @@
   },
   "include": [
     "extensions/**/*.ts",
-    "utils/**/*.ts"
+    "utils/**/*.ts",
+    "sandboxes/**/*.ts"
   ],
   "exclude": [
     "node_modules"

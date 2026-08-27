@@ -1,4 +1,4 @@
-import { defineSandbox } from "../extensions/sandbox/builder/buildSandbox";
+import { defineSandbox } from "../extensions/sandbox/builder/defineSandbox";
 import {
   bash,
   curl,

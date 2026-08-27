@@ -1,7 +1,7 @@
 import path from "path";
 import os from "os";
 import { Dependency, SandboxDefinition } from "./defineSandbox";
-import { VolumeMount } from "./dockerApi";
+import { VolumeMount } from "./utils/dockerApi";
 
 function getRuntimePath(): string {
   return path.join(

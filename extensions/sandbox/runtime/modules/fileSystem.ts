@@ -1,6 +1,6 @@
 import z from "zod";
 import fs from "fs/promises";
-import { publicProcedure, router } from "./trpc";
+import { publicProcedure, router } from "../trpc";
 
 const readFile = publicProcedure
   .input(z.object({ path: z.string() }))

@@ -1,5 +1,5 @@
 import { execSync } from "child_process";
-import { publicProcedure, router } from "./trpc";
+import { publicProcedure, router } from "../trpc";
 import z from "zod";
 
 const executeCommand = publicProcedure

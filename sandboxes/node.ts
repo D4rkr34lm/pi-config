@@ -1,4 +1,4 @@
-import { defineSandbox } from "../extensions/sandbox/builder/defineSandbox";
+import { defineSandbox } from "../extensions/sandbox/service/defineSandbox";
 import {
   bash,
   curl,
@@ -6,7 +6,7 @@ import {
   node,
   python,
   ripGrep,
-} from "../extensions/sandbox/builder/dependencies";
+} from "../extensions/sandbox/service/dependencies";
 
 export default defineSandbox({
   base: "debian:bookworm",

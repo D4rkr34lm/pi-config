@@ -6,6 +6,8 @@ import {
   assembleSandboxDockerFile,
 } from "./assembleSandboxImage";
 import { useSimpleDockerApi, VolumeMount } from "./utils/dockerApi";
+import { SANDBOX_API_PORT, SANDBOX_WORKING_DIR } from "./constants";
+import path from "path";
 
 function getSandboxImageTag(definition: SandboxDefinition) {
   return `pi-sandbox-${definition.name}:latest`;
@@ -30,12 +32,14 @@ async function doesSandboxImageExist(imageTag: string): Promise<boolean> {
   return allImages.some((image) => image.includes(imageTag));
 }
 
-interface Sandbox {
+export interface Sandbox {
+  workspacePath: string;
+  definition: SandboxDefinition;
   api: TRPCClient<AppRouter>;
   stop: () => Promise<void>;
+  isPathProtected: (path: string) => boolean;
 }
 
-const SANDBOX_API_PORT = 3000;
 export async function startSandbox(
   definition: SandboxDefinition,
   workspacePath: string
@@ -53,7 +57,7 @@ export async function startSandbox(
   const volumeMounts: VolumeMount[] = [
     {
       source: workspacePath,
-      target: "/workspace",
+      target: SANDBOX_WORKING_DIR,
     },
     ...assembleIsolationVolumeMounts(definition),
   ];
@@ -92,10 +96,17 @@ export async function startSandbox(
   );
 
   return {
+    workspacePath,
+    definition,
     api: sandboxApi,
     stop: async () => {
       await dockerApi.stopContainer(imageTag);
       await dockerApi.removeContainer(imageTag);
+    },
+    isPathProtected: (absolutePath: string) => {
+      return forbiddenGlobs.some((glob) =>
+        path.matchesGlob(absolutePath, glob)
+      );
     },
   };
 }

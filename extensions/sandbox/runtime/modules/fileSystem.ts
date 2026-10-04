@@ -25,8 +25,16 @@ const denyAccess = publicProcedure
     }
   });
 
+const mkdir = publicProcedure
+  .input(z.object({ path: z.string() }))
+  .mutation(async ({ input }) => {
+    await fs.mkdir(input.path, { recursive: true });
+    return { success: true };
+  });
+
 export const fileSystemRouter = router({
   readFile,
   writeFile,
   denyAccess,
+  mkdir,
 });

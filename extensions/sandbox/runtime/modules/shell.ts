@@ -1,12 +1,50 @@
-import { execSync } from "child_process";
+import { spawn } from "child_process";
 import { publicProcedure, router } from "../trpc";
 import z from "zod";
+import { toString } from "lodash-es";
 
 const executeCommand = publicProcedure
-  .input(z.object({ command: z.string() }))
-  .mutation(async ({ input }) => {
-    const { command } = input;
-    return execSync(command, { encoding: "utf-8" });
+  .input(
+    z.object({
+      command: z.string(),
+      timeout: z.number().optional(),
+      env: z.record(z.string(), z.string().optional()).optional(),
+    })
+  )
+  .mutation(async function* ({ input, signal }) {
+    const { command, timeout, env } = input;
+
+    if (signal?.aborted) {
+      return;
+    }
+
+    const commandProcess = spawn(command, {
+      shell: true,
+      env: env,
+      timeout,
+    });
+
+    const onAbort = () => {
+      commandProcess.kill();
+    };
+
+    signal?.addEventListener("abort", onAbort, { once: true });
+
+    for await (const data of commandProcess.stdout) {
+      yield { type: "stdout" as const, data: toString(data) };
+    }
+
+    for await (const data of commandProcess.stderr) {
+      yield { type: "stderr" as const, data: toString(data) };
+    }
+
+    const exitCode = await new Promise<number | null>((resolve) => {
+      commandProcess.on("exit", (code) => {
+        resolve(code);
+      });
+    });
+
+    yield { type: "exit" as const, code: exitCode };
   });
 
 export const shellRouter = router({

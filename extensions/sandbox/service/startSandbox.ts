@@ -1,5 +1,9 @@
 import { AppRouter } from "../runtime/router";
-import { createTRPCClient, httpBatchLink, TRPCClient } from "@trpc/client";
+import {
+  createTRPCClient,
+  httpBatchStreamLink,
+  TRPCClient,
+} from "@trpc/client";
 import { SandboxDefinition } from "./defineSandbox";
 import {
   assembleIsolationVolumeMounts,
@@ -75,7 +79,7 @@ export async function startSandbox(
 
   const sandboxApi = createTRPCClient<AppRouter>({
     links: [
-      httpBatchLink({
+      httpBatchStreamLink({
         url: `http://localhost:${SANDBOX_API_PORT}`,
       }),
     ],

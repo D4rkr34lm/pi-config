@@ -6,6 +6,7 @@ import { Sandbox, startSandbox } from "./startSandbox";
 import { buildSandboxedReadTool } from "../tools/read";
 import { buildSandboxedWriteTool } from "../tools/write";
 import { buildSandboxedEditTool } from "../tools/edit";
+import { buildSandboxedBashTool } from "../tools/bash";
 
 export async function useSandboxService() {
   const sandboxConfig = getSandboxesConfig();
@@ -46,10 +47,12 @@ export async function useSandboxService() {
     const readTool = buildSandboxedReadTool(sandbox);
     const writeTool = buildSandboxedWriteTool(sandbox);
     const editTool = buildSandboxedEditTool(sandbox);
+    const bashTool = buildSandboxedBashTool(sandbox);
 
     pi.registerTool(readTool);
     pi.registerTool(writeTool);
     pi.registerTool(editTool);
+    pi.registerTool(bashTool);
   }
 
   return {

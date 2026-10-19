@@ -1,16 +1,23 @@
 import { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { hasValue } from "../../../utils/type-guards";
-import { getSandboxesConfig } from "./getSandboxConfig";
+import { getSandboxesConfig, SandboxConfig } from "./getSandboxConfig";
 import { loadSandboxDefinitions } from "./loadSandboxDefenitions";
 import { Sandbox, startSandbox } from "./startSandbox";
 import { buildSandboxedReadTool } from "../tools/read";
 import { buildSandboxedWriteTool } from "../tools/write";
 import { buildSandboxedEditTool } from "../tools/edit";
 import { buildSandboxedBashTool } from "../tools/bash";
+import { SandboxDefinition } from "./defineSandbox";
 
-export async function useSandboxService() {
-  const sandboxConfig = getSandboxesConfig();
-  const sandboxDefinitions = await loadSandboxDefinitions();
+export interface SandboxServiceContext {
+  sandboxConfig?: SandboxConfig;
+  sandboxDefinitions?: Record<string, SandboxDefinition>;
+}
+
+export async function useSandboxService(context: SandboxServiceContext) {
+  const sandboxConfig = context.sandboxConfig ?? getSandboxesConfig();
+  const sandboxDefinitions =
+    context.sandboxDefinitions ?? (await loadSandboxDefinitions());
 
   const activeSandboxes: { [cwd: string]: Sandbox } = {};
 

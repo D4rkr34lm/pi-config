@@ -36,6 +36,7 @@ export function useSimpleDockerApi() {
   };
 
   const runContainer = async (args: {
+    containerName: string;
     image: string;
     volumes: VolumeMount[];
     ports: PortMapping[];
@@ -72,6 +73,22 @@ export function useSimpleDockerApi() {
     await execFile("docker", ["rm", containerId]);
   };
 
+  const listContainers = async (
+    options: { all?: boolean } = {}
+  ): Promise<string[]> => {
+    const { all = false } = options;
+    const args = ["ps", "-q"];
+    if (all) {
+      args.push("-a");
+    }
+
+    const { stdout } = await execFile("docker", args);
+    return stdout
+      .trim()
+      .split("\n")
+      .filter((id) => id.length > 0);
+  };
+
   const listImages = async (): Promise<string[]> => {
     const { stdout } = await execFile("docker", ["images", "-q"]);
     return stdout
@@ -80,11 +97,17 @@ export function useSimpleDockerApi() {
       .filter((id) => id.length > 0);
   };
 
+  const removeImage = async (imageId: string): Promise<void> => {
+    await execFile("docker", ["rmi", imageId]);
+  };
+
   return {
     buildImage,
     runContainer,
     stopContainer,
     removeContainer,
     listImages,
+    removeImage,
+    listContainers,
   };
 }

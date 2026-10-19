@@ -2,6 +2,7 @@ import { spawn } from "child_process";
 import { publicProcedure, router } from "../trpc";
 import z from "zod";
 import { toString } from "lodash-es";
+import { SANDBOX_USER_ID } from "../../service/constants";
 
 const executeCommand = publicProcedure
   .input(
@@ -22,6 +23,7 @@ const executeCommand = publicProcedure
       shell: true,
       env: env,
       timeout,
+      uid: SANDBOX_USER_ID,
     });
 
     const onAbort = () => {

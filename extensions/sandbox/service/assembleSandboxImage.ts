@@ -2,6 +2,7 @@ import path from "path";
 import os from "os";
 import { Dependency, SandboxDefinition } from "./defineSandbox";
 import { VolumeMount } from "./utils/dockerApi";
+import { SANDBOX_USER_ID } from "./constants";
 
 function getRuntimePath(): string {
   return path.join(
@@ -48,7 +49,7 @@ export function assembleSandboxDockerFile(
   RUN mkdir /workspace && chmod 777 /workspace
   RUN mkdir /runtime && chmod 700 /runtime
 
-  RUN useradd --shell /bin/bash sandbox
+  RUN useradd --shell /bin/bash --uid ${SANDBOX_USER_ID} sandbox
 
   ${assembleAptInstallCommand(aptDependencies)}
 

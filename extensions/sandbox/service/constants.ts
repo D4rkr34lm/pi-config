@@ -1,6 +1,8 @@
 import os from "os";
 import path from "path";
 
+export const SANDBOX_USER_ID = 1001;
+
 export const SANDBOX_API_PORT = 3000;
 export const SANDBOX_WORKING_DIR = "/workspace";
 

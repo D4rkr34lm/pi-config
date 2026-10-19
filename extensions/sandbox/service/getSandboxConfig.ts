@@ -3,7 +3,7 @@ import { SANDBOXES_CONFIG_FILE } from "./constants";
 import fs from "fs";
 
 const sandboxConfigSchema = z.record(z.string(), z.string());
-type SandboxConfig = z.infer<typeof sandboxConfigSchema>;
+export type SandboxConfig = z.infer<typeof sandboxConfigSchema>;
 
 export function getSandboxesConfig(): SandboxConfig {
   if (!fs.existsSync(SANDBOXES_CONFIG_FILE)) {

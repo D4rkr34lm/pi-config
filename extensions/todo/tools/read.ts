@@ -1,7 +1,7 @@
 import { isEmpty } from "lodash-es";
 import Type, { Static } from "typebox";
 import { hasNoValue, hasValue } from "../../../utils/type-guards";
-import { Todo, TodoStore } from "../service";
+import { Todo, TodoService } from "../service";
 import { AgentToolResult } from "@earendil-works/pi-coding-agent";
 
 export const readTodosSchema = Type.Object({
@@ -32,10 +32,10 @@ export type ReadTodosReturnDetails =
 
 export function executeReadTodo(
   params: Static<typeof readTodosSchema>,
-  todoStore: TodoStore
+  todoService: TodoService
 ): AgentToolResult<ReadTodosReturnDetails> {
   if (hasValue(params.todoId)) {
-    const todo = todoStore.readTodo(params.todoId);
+    const todo = todoService.readTodo(params.todoId);
     if (hasNoValue(todo)) {
       return {
         content: [
@@ -70,7 +70,7 @@ export function executeReadTodo(
       };
     }
   } else {
-    const todos = todoStore.listTodos();
+    const todos = todoService.listTodos();
     if (isEmpty(todos)) {
       return {
         content: [

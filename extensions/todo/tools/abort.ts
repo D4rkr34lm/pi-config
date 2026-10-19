@@ -1,5 +1,5 @@
 import Type, { Static } from "typebox";
-import { Todo, TodoChangeError, TodoStore } from "../service";
+import { Todo, TodoChangeError, TodoService } from "../service";
 import { AgentToolResult } from "@earendil-works/pi-coding-agent";
 
 export const abortTodoSchema = Type.Object({
@@ -25,9 +25,9 @@ export type AbortTodoReturnDetails =
 
 export function executeAbortTodo(
   params: Static<typeof abortTodoSchema>,
-  todoStore: TodoStore
+  todoService: TodoService
 ): AgentToolResult<AbortTodoReturnDetails> {
-  const result = todoStore.abortTodo(params.todoId, params.justification);
+  const result = todoService.abortTodo(params.todoId, params.justification);
   if (result.isErr()) {
     return {
       content: [

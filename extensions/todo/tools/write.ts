@@ -1,7 +1,7 @@
 import { Static } from "@earendil-works/pi-ai";
 import Type from "typebox";
 import { hasNoValue, hasValue } from "../../../utils/type-guards";
-import { TodoStore } from "../service";
+import { TodoService } from "../service";
 import { isEmpty } from "lodash-es";
 import { AgentToolResult } from "@earendil-works/pi-coding-agent";
 
@@ -41,7 +41,7 @@ export type WriteTodosReturnDetails =
 
 export function executeWriteTodo(
   params: Static<typeof writeTodosSchema>,
-  todoStore: TodoStore
+  todoService: TodoService
 ): AgentToolResult<WriteTodosReturnDetails> {
   const todosToCreate = params.todos.filter((t) => hasNoValue(t.id));
   const todosToUpdate = params.todos.filter(
@@ -51,7 +51,7 @@ export function executeWriteTodo(
 
   const canUpdateResults = todosToUpdate.map((t) => ({
     todoId: t.id,
-    result: todoStore.canUpdateTodo(t.id),
+    result: todoService.canUpdateTodo(t.id),
   }));
 
   const notExecutableTodos = canUpdateResults
@@ -86,10 +86,10 @@ export function executeWriteTodo(
     };
   } else {
     const createdTodos = todosToCreate.map((t) =>
-      todoStore.createTodo({ title: t.title, description: t.description })
+      todoService.createTodo({ title: t.title, description: t.description })
     );
     const updatedTodos = todosToUpdate.map((t) =>
-      todoStore.updateTodo(t.id, {
+      todoService.updateTodo(t.id, {
         title: t.title,
         description: t.description,
       })

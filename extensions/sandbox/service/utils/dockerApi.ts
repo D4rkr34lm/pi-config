@@ -55,8 +55,6 @@ export function useSimpleDockerApi() {
 
     const { stdout } = await execFile("docker", [
       "run",
-      "--rm",
-      "-it",
       ...volumeArgs,
       ...portArgs,
       image,
@@ -77,7 +75,7 @@ export function useSimpleDockerApi() {
     options: { all?: boolean } = {}
   ): Promise<string[]> => {
     const { all = false } = options;
-    const args = ["ps", "-q"];
+    const args = ["ps", "--format", "{{.Repository}}:{{.Tag}}"];
     if (all) {
       args.push("-a");
     }
@@ -90,7 +88,11 @@ export function useSimpleDockerApi() {
   };
 
   const listImages = async (): Promise<string[]> => {
-    const { stdout } = await execFile("docker", ["images", "-q"]);
+    const { stdout } = await execFile("docker", [
+      "images",
+      "--format",
+      "{{.Repository}}:{{.Tag}}",
+    ]);
     return stdout
       .trim()
       .split("\n")

@@ -1,5 +1,6 @@
 import { execFile as execFileCallback } from "child_process";
 import { promisify } from "util";
+import { hasValue } from "../../../../utils/type-guards";
 
 const execFile = promisify(execFileCallback);
 
@@ -36,12 +37,12 @@ export function useSimpleDockerApi() {
   };
 
   const runContainer = async (args: {
-    containerName: string;
+    containerName?: string;
     image: string;
     volumes: VolumeMount[];
     ports: PortMapping[];
   }): Promise<string> => {
-    const { image, volumes, ports } = args;
+    const { containerName, image, volumes, ports } = args;
 
     const volumeArgs = volumes.flatMap((volume) => [
       "-v",
@@ -53,8 +54,12 @@ export function useSimpleDockerApi() {
       `${port.hostPort}:${port.containerPort}`,
     ]);
 
+    const nameArgs = hasValue(containerName) ? ["--name", containerName] : [];
+
     const { stdout } = await execFile("docker", [
       "run",
+      "--detach",
+      ...nameArgs,
       ...volumeArgs,
       ...portArgs,
       image,
@@ -75,7 +80,7 @@ export function useSimpleDockerApi() {
     options: { all?: boolean } = {}
   ): Promise<string[]> => {
     const { all = false } = options;
-    const args = ["ps", "--format", "{{.Repository}}:{{.Tag}}"];
+    const args = ["ps", "--no-trunc", "--format", "{{.ID}}"];
     if (all) {
       args.push("-a");
     }

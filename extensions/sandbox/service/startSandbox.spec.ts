@@ -1,6 +1,5 @@
-import { assert, beforeAll, beforeEach, describe, expect } from "vitest";
+import { assert, describe, expect, it } from "vitest";
 import { defineSandbox, Dependency, SandboxDefinition } from "./defineSandbox";
-import { afterEach, it } from "node:test";
 import { useSimpleDockerApi } from "./utils/dockerApi";
 import { startSandbox } from "./startSandbox";
 import fs from "fs";
@@ -129,7 +128,7 @@ describe("start Sandbox", () => {
     const filePath = "test-file.txt";
     const fileContent = "Hello from the workspace!";
 
-    using workspaceSetup = setupTestWorkspace([
+    using _workspaceSetup = setupTestWorkspace([
       {
         path: filePath,
         content: fileContent,
@@ -154,7 +153,7 @@ describe("start Sandbox", () => {
     const filePath = "test-file.txt";
     const targetContent = "Updated content from the sandbox!";
 
-    using workspaceSetup = setupTestWorkspace([
+    using _workspaceSetup = setupTestWorkspace([
       {
         path: "test-file.txt",
         content: "Initial content",

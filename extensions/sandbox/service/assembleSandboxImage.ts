@@ -1,65 +1,51 @@
-import path from "path";
-import os from "os";
-import { Dependency, SandboxDefinition } from "./defineSandbox";
+import { SandboxDefinition } from "./defineSandbox";
 import { VolumeMount } from "./utils/dockerApi";
 import { SANDBOX_USER_ID } from "./constants";
 
-function getRuntimePath(): string {
-  return path.join(
-    os.homedir(),
-    ".pi",
-    "agent",
-    "extensions",
-    "sandbox",
-    "runtime"
-  );
-}
+const SANDBOX_BASE_IMAGE = "debian:bookworm";
+const ESSENTIAL_DEPENDENCIES = `ca-certificates curl git bash ripgrep`;
+const NVM_DIR = "/root/.nvm";
 
-function assembleAptInstallCommand(dependencies: Dependency[]): string {
-  return `RUN apt-get update && apt-get install -y ${dependencies
-    .map((dep) => `${dep.name}=${dep.version}`)
-    .join(" ")} && apt-get clean && rm -rf /var/lib/apt/lists/*`;
-}
+const SETUP_NVM = `curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.6/install.sh | bash`;
 
-function assembleNpmInstallCommand(dependencies: Dependency[]): string {
-  return `RUN npm install -g ${dependencies
-    .map((dep) => `${dep.name}@${dep.version}`)
-    .join(" ")}`;
-}
+const installNode = (nodeVersion: string) => `
+RUN . "${NVM_DIR}/nvm.sh" && nvm install ${nodeVersion} && nvm use ${nodeVersion} && nvm alias default ${nodeVersion}
+ENV PATH="${NVM_DIR}/versions/node/v${nodeVersion}/bin:$PATH"
+`;
+
+const installNpm = (npmVersion: string) => `
+RUN npm install -g npm@${npmVersion}
+`;
+
+const installTsx = (tsxVersion: string) => `
+RUN npm install -g tsx@${tsxVersion}
+`;
 
 export function assembleSandboxDockerFile(
   definition: SandboxDefinition
 ): string {
-  const baseImage = definition.base;
-
-  const sortedDependencies = definition.dependencies.sort((a, b) =>
-    a.name.localeCompare(b.name)
-  );
-
-  const aptDependencies = sortedDependencies.filter(
-    (dep) => dep.origin === "apt"
-  );
-  const npmDependencies = sortedDependencies.filter(
-    (dep) => dep.origin === "npm"
-  );
-
   return `
-  FROM ${baseImage}
+  FROM ${SANDBOX_BASE_IMAGE}
+
+  RUN apt-get update && apt-get install -y ${ESSENTIAL_DEPENDENCIES} && rm -rf /var/lib/apt/lists/*
+
+  RUN ${SETUP_NVM}
+
+  ${installNode(definition.dependencies.node)}
+  ${installNpm(definition.dependencies.npm)}
+  ${installTsx(definition.dependencies.tsx)}
 
   RUN mkdir /workspace && chmod 777 /workspace
   RUN mkdir /runtime && chmod 700 /runtime
 
   RUN useradd --shell /bin/bash --uid ${SANDBOX_USER_ID} sandbox
 
-  ${assembleAptInstallCommand(aptDependencies)}
+  COPY runtime /runtime
+  RUN npm install --prefix /runtime
 
-  ${assembleNpmInstallCommand(npmDependencies)}
+  WORKDIR /workspace
 
-  COPY ${getRuntimePath()} /runtime
-
-  WORKDIR /runtime
-
-  CMD tsx index.ts
+  CMD /runtime/node_modules/.bin/tsx /runtime/server.ts
   `;
 }
 

@@ -1,44 +1,40 @@
-import { node } from "./dependencies";
+const DEFAULT_NODE_VERSION = "24";
+const DEFAULT_NPM_VERSION = "12";
+const DEFAULT_TSX_VERSION = "4.20.6";
 
 export type BaseImage = "debian:bookworm";
-export type DependencyOrigin = "apt" | "npm";
 
-export interface Dependency {
-  name: string;
-  version: string;
-  origin: DependencyOrigin;
+export interface Dependencies {
+  node: string;
+  npm: string;
+  tsx: string;
 }
 
 export interface SandboxDefinition {
   name: string;
-  base: BaseImage;
   forbiddenPaths: string[];
   isolatedPaths: string[];
-  dependencies: Dependency[];
+  dependencies: Dependencies;
   runAfterStart: string[];
 }
 
 export function defineSandbox(definition: {
   name: string;
-  base: BaseImage;
   forbiddenPaths?: string[];
   isolatedPaths?: string[];
-  dependencies?: Array<Dependency | Dependency[]>;
+  dependencies?: Partial<Dependencies>;
   runAfterStart?: string[];
 }): SandboxDefinition {
-  const dependencies = definition.dependencies?.flat() ?? [];
-  const dependenciesWithRequiredDefaults = dependencies.some(
-    (dep) => dep.name === "node"
-  )
-    ? dependencies
-    : [...dependencies, ...node()];
-
   return {
     name: definition.name,
-    base: definition.base,
     forbiddenPaths: definition.forbiddenPaths ?? [],
     isolatedPaths: definition.isolatedPaths ?? [],
-    dependencies: dependenciesWithRequiredDefaults,
+    dependencies: {
+      node: DEFAULT_NODE_VERSION,
+      npm: DEFAULT_NPM_VERSION,
+      tsx: DEFAULT_TSX_VERSION,
+      ...definition.dependencies,
+    },
     runAfterStart: definition.runAfterStart ?? [],
   };
 }

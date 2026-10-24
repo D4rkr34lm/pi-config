@@ -1,0 +1,10 @@
+{
+  "name": "@d4rkr34lm/pi-config/sandbox-runtime",
+  "version": "0.1.0",
+  "type": "module",
+  "dependencies": {
+    "@trpc/server": "^11.18.0",
+    "lodash-es": "4.18.1",
+    "zod": "^4.4.3"
+  }
+}

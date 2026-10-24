@@ -21,4 +21,16 @@ export default defineConfig([
   markdown.configs.recommended,
   ...ts.configs.recommended,
   prettier,
+  {
+    rules: {
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
+    },
+  },
 ]);

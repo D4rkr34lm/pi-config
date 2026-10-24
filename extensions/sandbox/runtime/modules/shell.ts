@@ -2,7 +2,7 @@ import { spawn } from "child_process";
 import { publicProcedure, router } from "../trpc";
 import z from "zod";
 import { toString } from "lodash-es";
-import { SANDBOX_USER_ID } from "../../service/constants";
+import { SANDBOX_USER_ID } from "../constants";
 
 const executeCommand = publicProcedure
   .input(

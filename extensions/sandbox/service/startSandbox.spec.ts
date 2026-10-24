@@ -1,66 +1,55 @@
-import { assert, describe, expect, it } from "vitest";
-import { defineSandbox, Dependency, SandboxDefinition } from "./defineSandbox";
+import { afterAll, describe, expect, it } from "vitest";
+import { defineSandbox, SandboxDefinition } from "./defineSandbox";
 import { useSimpleDockerApi } from "./utils/dockerApi";
 import { startSandbox } from "./startSandbox";
 import fs from "fs";
 import path from "path";
 
 const TEST_SANDBOX_NAME = "test-sandbox";
-const TEST_SANDBOX_BASE = "debian:bookworm";
+const TEST_SANDBOX_IMAGE = `pi-sandbox-${TEST_SANDBOX_NAME}:latest`;
 
 const TEST_SANDBOX_DIR = "./test-data/sandbox";
 
+const TEST_TIMEOUT = 60 * 1000; // 60 seconds
+
 function mockSandboxDefinition({
-  dependencies = [],
   forbiddenPaths = [],
   isolatedPaths = [],
   runAfterStart = [],
 }: {
-  dependencies?: Dependency[];
   forbiddenPaths?: string[];
   isolatedPaths?: string[];
   runAfterStart?: string[];
 }) {
   return defineSandbox({
     name: TEST_SANDBOX_NAME,
-    base: TEST_SANDBOX_BASE,
-    dependencies,
     forbiddenPaths,
     isolatedPaths,
     runAfterStart,
   });
 }
 
-describe("start Sandbox", () => {
+describe("start Sandbox", { concurrent: false }, () => {
+  afterAll(async () => {
+    const dockerApi = useSimpleDockerApi();
+    const images = await dockerApi.listImages();
+
+    if (images.includes(TEST_SANDBOX_IMAGE)) {
+      await dockerApi.removeImage(TEST_SANDBOX_IMAGE);
+    }
+  });
+
   async function setupTestSandbox(
     testId: string,
     sandboxDefinition: SandboxDefinition
   ) {
-    const dockerApi = useSimpleDockerApi();
-
-    const availableImages = await dockerApi.listImages();
-    const containers = await dockerApi.listContainers({
-      all: true,
+    const sandbox = await startSandbox(sandboxDefinition, TEST_SANDBOX_DIR, {
+      containerName: testId,
     });
-
-    assert(
-      !availableImages.includes(TEST_SANDBOX_BASE),
-      `The base image ${TEST_SANDBOX_BASE} should not be available before the test.`
-    );
-    assert(
-      !containers.includes(TEST_SANDBOX_NAME),
-      `The container ${TEST_SANDBOX_NAME} should not be running before the test.`
-    );
-
-    const sandbox = await startSandbox(sandboxDefinition, TEST_SANDBOX_DIR);
 
     return {
       sandbox,
-      [Symbol.dispose]: async () => {
-        await sandbox.stop();
-        dockerApi.removeContainer(testId);
-        dockerApi.removeImage(sandboxDefinition.name);
-      },
+      [Symbol.asyncDispose]: () => sandbox.stop(),
     };
   }
 
@@ -84,101 +73,120 @@ describe("start Sandbox", () => {
     };
   }
 
-  it("allows starting a sandbox", async () => {
-    using testSetup = await setupTestSandbox(
-      "test-start-sandbox",
-      mockSandboxDefinition({})
-    );
+  it(
+    "allows starting a sandbox",
+    async () => {
+      await using testSetup = await setupTestSandbox(
+        "test-start-sandbox",
+        mockSandboxDefinition({})
+      );
 
-    const sandbox = testSetup.sandbox;
+      const sandbox = testSetup.sandbox;
 
-    expect(sandbox.api.getHeartbeat.query()).resolves.toEqual({
-      isRunning: true,
-    });
-  });
+      await expect(sandbox.api.getHeartbeat.query()).resolves.toEqual({
+        isRunning: true,
+      });
+    },
+    TEST_TIMEOUT
+  );
 
-  it("allows creating an reading a file in the sandbox", async () => {
-    using testSetup = await setupTestSandbox(
-      "test-create-file",
-      mockSandboxDefinition({})
-    );
+  it(
+    "allows creating an reading a file in the sandbox",
+    async () => {
+      await using testSetup = await setupTestSandbox(
+        "test-create-file",
+        mockSandboxDefinition({})
+      );
 
-    const filePath = "/test-file.txt";
-    const fileContent = "Hello, Sandbox!";
+      const filePath = "/test-file.txt";
+      const fileContent = "Hello, Sandbox!";
 
-    const sandbox = testSetup.sandbox;
+      const sandbox = testSetup.sandbox;
 
-    const fileWriteResult = await sandbox.api.fileSystem.writeFile.mutate({
-      path: filePath,
-      content: fileContent,
-    });
-
-    expect(fileWriteResult).toEqual({
-      success: true,
-    });
-
-    const fileReadResult = await sandbox.api.fileSystem.readFile.query({
-      path: filePath,
-    });
-
-    expect(fileReadResult).toEqual(fileContent);
-  });
-
-  it("allows reading a file in the sandbox from the workspace", async () => {
-    const filePath = "test-file.txt";
-    const fileContent = "Hello from the workspace!";
-
-    using _workspaceSetup = setupTestWorkspace([
-      {
+      const fileWriteResult = await sandbox.api.fileSystem.writeFile.mutate({
         path: filePath,
         content: fileContent,
-      },
-    ]);
+      });
 
-    using testSetup = await setupTestSandbox(
-      "test-read-workspace-file",
-      mockSandboxDefinition({})
-    );
+      expect(fileWriteResult).toEqual({
+        success: true,
+      });
 
-    const sandbox = testSetup.sandbox;
+      const fileReadResult = await sandbox.api.fileSystem.readFile.query({
+        path: filePath,
+      });
 
-    const fileReadResult = await sandbox.api.fileSystem.readFile.query({
-      path: filePath,
-    });
+      expect(fileReadResult).toEqual(fileContent);
+    },
+    TEST_TIMEOUT
+  );
 
-    expect(fileReadResult).toEqual(fileContent);
-  });
+  it(
+    "allows reading a file in the sandbox from the workspace",
+    async () => {
+      const filePath = "test-file.txt";
+      const fileContent = "Hello from the workspace!";
 
-  it("allows editing a workspace file in the sandbox", async () => {
-    const filePath = "test-file.txt";
-    const targetContent = "Updated content from the sandbox!";
+      using _workspaceSetup = setupTestWorkspace([
+        {
+          path: filePath,
+          content: fileContent,
+        },
+      ]);
 
-    using _workspaceSetup = setupTestWorkspace([
-      {
-        path: "test-file.txt",
-        content: "Initial content",
-      },
-    ]);
+      await using testSetup = await setupTestSandbox(
+        "test-read-workspace-file",
+        mockSandboxDefinition({})
+      );
 
-    using testSetup = await setupTestSandbox(
-      "test-edit-file",
-      mockSandboxDefinition({})
-    );
+      const sandbox = testSetup.sandbox;
 
-    const sandbox = testSetup.sandbox;
+      const fileReadResult = await sandbox.api.fileSystem.readFile.query({
+        path: filePath,
+      });
 
-    const fileWriteResult = await sandbox.api.fileSystem.writeFile.mutate({
-      path: filePath,
-      content: targetContent,
-    });
+      expect(fileReadResult).toEqual(fileContent);
+    },
+    TEST_TIMEOUT
+  );
 
-    expect(fileWriteResult).toEqual({
-      success: true,
-    });
+  it(
+    "allows editing a workspace file in the sandbox",
+    async () => {
+      const filePath = "test-file.txt";
+      const targetContent = "Updated content from the sandbox!";
 
-    const fileContent = fs.readFileSync(path.join(TEST_SANDBOX_DIR, filePath));
-    expect(fileContent).toEqual(targetContent);
-  });
+      using _workspaceSetup = setupTestWorkspace([
+        {
+          path: "test-file.txt",
+          content: "Initial content",
+        },
+      ]);
+
+      await using testSetup = await setupTestSandbox(
+        "test-edit-file",
+        mockSandboxDefinition({})
+      );
+
+      const sandbox = testSetup.sandbox;
+
+      const fileWriteResult = await sandbox.api.fileSystem.writeFile.mutate({
+        path: filePath,
+        content: targetContent,
+      });
+
+      expect(fileWriteResult).toEqual({
+        success: true,
+      });
+
+      const fileContent = fs.readFileSync(
+        path.join(TEST_SANDBOX_DIR, filePath),
+        "utf8"
+      );
+      expect(fileContent).toEqual(targetContent);
+    },
+    TEST_TIMEOUT
+  );
 
   it.skip("allows executing bash commands in the sandbox", () => {});
 

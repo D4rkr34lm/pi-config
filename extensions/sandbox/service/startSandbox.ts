@@ -12,9 +12,30 @@ import {
 import { useSimpleDockerApi, VolumeMount } from "./utils/dockerApi";
 import { SANDBOX_API_PORT, SANDBOX_WORKING_DIR } from "./constants";
 import path from "path";
+import { fileURLToPath } from "url";
 
 function getSandboxImageTag(definition: SandboxDefinition) {
   return `pi-sandbox-${definition.name}:latest`;
+}
+
+function getSandboxBuildContext() {
+  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+}
+
+async function waitForSandboxApi(
+  sandboxApi: TRPCClient<AppRouter>,
+  remainingAttempts = 100
+): Promise<void> {
+  try {
+    await sandboxApi.getHeartbeat.query();
+  } catch (error) {
+    if (remainingAttempts <= 1) {
+      throw new Error("Sandbox API did not become ready", { cause: error });
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    return waitForSandboxApi(sandboxApi, remainingAttempts - 1);
+  }
 }
 
 async function buildSandboxImage(definition: SandboxDefinition) {
@@ -25,7 +46,7 @@ async function buildSandboxImage(definition: SandboxDefinition) {
   await dockerApi.buildImage({
     dockerfile: dockerfileContent,
     tag: imageTag,
-    context: "~",
+    context: getSandboxBuildContext(),
   });
 }
 
@@ -46,7 +67,8 @@ export interface Sandbox {
 
 export async function startSandbox(
   definition: SandboxDefinition,
-  workspacePath: string
+  workspacePath: string,
+  options: { containerName?: string } = {}
 ): Promise<Sandbox> {
   const dockerApi = useSimpleDockerApi();
 
@@ -60,13 +82,14 @@ export async function startSandbox(
 
   const volumeMounts: VolumeMount[] = [
     {
-      source: workspacePath,
+      source: path.resolve(workspacePath),
       target: SANDBOX_WORKING_DIR,
     },
     ...assembleIsolationVolumeMounts(definition),
   ];
 
-  dockerApi.runContainer({
+  const containerId = await dockerApi.runContainer({
+    containerName: options.containerName ?? `pi-sandbox-${definition.name}`,
     image: imageTag,
     volumes: volumeMounts,
     ports: [
@@ -85,28 +108,36 @@ export async function startSandbox(
     ],
   });
 
-  const forbiddenGlobs = ["/runtime/**", ...definition.forbiddenPaths];
-  await Promise.all(
-    forbiddenGlobs.map((glob) =>
-      sandboxApi.fileSystem.denyAccess.mutate({ glob })
-    )
-  );
+  const stopContainer = async (): Promise<void> => {
+    await dockerApi.stopContainer(containerId);
+    await dockerApi.removeContainer(containerId);
+  };
 
-  const runAfterStartCommands = definition.runAfterStart;
-  await Promise.all(
-    runAfterStartCommands.map((command) =>
-      sandboxApi.shell.executeCommand.mutate({ command })
-    )
-  );
+  const forbiddenGlobs = ["/runtime/**", ...definition.forbiddenPaths];
+
+  try {
+    await waitForSandboxApi(sandboxApi);
+
+    await Promise.all(
+      forbiddenGlobs.map((glob) =>
+        sandboxApi.fileSystem.denyAccess.mutate({ glob })
+      )
+    );
+    await Promise.all(
+      definition.runAfterStart.map((command) =>
+        sandboxApi.shell.executeCommand.mutate({ command })
+      )
+    );
+  } catch (error) {
+    await stopContainer();
+    throw error;
+  }
 
   return {
     workspacePath,
     definition,
     api: sandboxApi,
-    stop: async () => {
-      await dockerApi.stopContainer(imageTag);
-      await dockerApi.removeContainer(imageTag);
-    },
+    stop: stopContainer,
     isPathProtected: (absolutePath: string) => {
       return forbiddenGlobs.some((glob) =>
         path.matchesGlob(absolutePath, glob)

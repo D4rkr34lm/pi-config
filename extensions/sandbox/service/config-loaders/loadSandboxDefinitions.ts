@@ -1,7 +1,7 @@
 import fs from "fs";
-import { SANDBOXES_DIR } from "./constants";
+import { SANDBOXES_DIR } from "../constants";
 import path from "path";
-import { SandboxDefinition } from "./defineSandbox";
+import { SandboxDefinition } from "../defineSandbox";
 import { keyBy } from "lodash-es";
 
 export async function loadSandboxDefinitions() {

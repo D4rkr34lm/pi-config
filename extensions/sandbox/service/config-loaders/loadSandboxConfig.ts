@@ -1,11 +1,11 @@
 import z from "zod";
-import { SANDBOXES_CONFIG_FILE } from "./constants";
+import { SANDBOXES_CONFIG_FILE } from "../constants";
 import fs from "fs";
 
 const sandboxConfigSchema = z.record(z.string(), z.string());
 export type SandboxConfig = z.infer<typeof sandboxConfigSchema>;
 
-export function getSandboxesConfig(): SandboxConfig {
+export function loadSandboxesConfig(): SandboxConfig {
   if (!fs.existsSync(SANDBOXES_CONFIG_FILE)) {
     throw new Error(`TODO: implement`);
   }

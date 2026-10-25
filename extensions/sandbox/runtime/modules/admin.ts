@@ -1,6 +1,7 @@
 import z from "zod";
 import { protectedProcedure, publicProcedure, router } from "../trpc";
-import { storage } from "../storage";
+import { setupStorage } from "../storage";
+import { denyAccessToGlob } from "../utils/denyAccessToGlob";
 
 const isAvailable = publicProcedure.query(() => ({
   isAvailable: true,
@@ -15,8 +16,13 @@ const setup = protectedProcedure
   .mutation(async ({ input }) => {
     const { forbiddenGlobs } = input;
 
-    storage.forbiddenGlobs = forbiddenGlobs;
-    storage.isSetup = true;
+    const denyPromises = forbiddenGlobs.map((glob) => {
+      return denyAccessToGlob(glob);
+    });
+
+    await Promise.allSettled(denyPromises);
+
+    setupStorage({ forbiddenGlobs });
 
     return {
       success: true,

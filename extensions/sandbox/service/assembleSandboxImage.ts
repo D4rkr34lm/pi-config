@@ -49,10 +49,10 @@ export function assembleSandboxDockerFile(
   `;
 }
 
-export function assembleIsolationVolumeMounts(
+export function assemblePrivateVolumeMounts(
   sandboxDefinition: SandboxDefinition
 ): VolumeMount[] {
-  return sandboxDefinition.isolatedPaths.map((path) => ({
+  return sandboxDefinition.fileSystemSettings.privatePaths.map((path) => ({
     source: path,
     target: path,
   }));

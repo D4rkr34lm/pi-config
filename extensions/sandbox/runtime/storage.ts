@@ -15,3 +15,8 @@ export const storage: Storage = {
   authToken: authToken,
   forbiddenGlobs: [],
 };
+
+export function setupStorage({ forbiddenGlobs }: { forbiddenGlobs: string[] }) {
+  storage.isSetup = true;
+  storage.forbiddenGlobs = forbiddenGlobs;
+}

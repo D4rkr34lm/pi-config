@@ -6,7 +6,7 @@ import {
 } from "@trpc/client";
 import { SandboxDefinition } from "./defineSandbox";
 import {
-  assembleIsolationVolumeMounts,
+  assemblePrivateVolumeMounts,
   assembleSandboxDockerFile,
 } from "./assembleSandboxImage";
 import { useSimpleDockerApi, VolumeMount } from "./utils/dockerApi";
@@ -23,18 +23,18 @@ function getSandboxBuildContext() {
 }
 
 async function waitForSandboxApi(
-  sandboxApi: TRPCClient<AppRouter>,
-  remainingAttempts = 100
+  sandboxApi: TRPCClient<AppRouter>
 ): Promise<void> {
-  try {
-    await sandboxApi.getHeartbeat.query();
-  } catch (error) {
-    if (remainingAttempts <= 1) {
-      throw new Error("Sandbox API did not become ready", { cause: error });
-    }
+  let attempts = 100;
 
-    await new Promise((resolve) => setTimeout(resolve, 100));
-    return waitForSandboxApi(sandboxApi, remainingAttempts - 1);
+  while (attempts > 0) {
+    try {
+      await sandboxApi.admin.isAvailable.query();
+      return;
+    } catch {
+      attempts--;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
   }
 }
 
@@ -67,8 +67,7 @@ export interface Sandbox {
 
 export async function startSandbox(
   definition: SandboxDefinition,
-  workspacePath: string,
-  options: { containerName?: string } = {}
+  workspacePath: string
 ): Promise<Sandbox> {
   const dockerApi = useSimpleDockerApi();
 
@@ -85,11 +84,11 @@ export async function startSandbox(
       source: path.resolve(workspacePath),
       target: SANDBOX_WORKING_DIR,
     },
-    ...assembleIsolationVolumeMounts(definition),
+    ...assemblePrivateVolumeMounts(definition),
   ];
 
   const containerId = await dockerApi.runContainer({
-    containerName: options.containerName ?? `pi-sandbox-${definition.name}`,
+    containerName: `pi-sandbox-${definition.name}`,
     image: imageTag,
     volumes: volumeMounts,
     ports: [

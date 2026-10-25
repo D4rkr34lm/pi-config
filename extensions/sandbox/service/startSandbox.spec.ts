@@ -12,6 +12,34 @@ const TEST_SANDBOX_DIR = "./test-data/sandbox";
 
 const TEST_TIMEOUT = 60 * 1000; // 60 seconds
 
+async function collectShellStream(
+  stream: AsyncIterable<
+    | { type: "stdout" | "stderr"; data: string }
+    | { type: "exit"; code: number | null }
+  >
+): Promise<{
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+}> {
+  let stdout = "";
+  let stderr = "";
+  let exitCode: number | null = null;
+
+  for await (const chunk of stream) {
+    if (chunk.type === "stdout") {
+      stdout += chunk.data;
+    } else if (chunk.type === "stderr") {
+      stderr += chunk.data;
+    } else if (chunk.type === "exit") {
+      exitCode = chunk.code;
+      break;
+    }
+  }
+
+  return { stdout, stderr, exitCode };
+}
+
 function mockSandboxDefinition({
   forbiddenPaths = [],
   isolatedPaths = [],
@@ -188,13 +216,90 @@ describe("start Sandbox", { concurrent: false }, () => {
     TEST_TIMEOUT
   );
 
-  it.skip("allows executing bash commands in the sandbox", () => {});
+  it(
+    "allows executing bash commands in the sandbox",
+    async () => {
+      using _workspaceSetup = setupTestWorkspace([
+        {
+          path: "test-script.sh",
+          content: "#!/bin/bash\necho 'Hello, World!'",
+        },
+      ]);
 
-  it.skip("prevents read and write access to forbidden paths", () => {});
+      await using testSetup = await setupTestSandbox(
+        "test-bash-command",
+        mockSandboxDefinition({})
+      );
+
+      const sandbox = testSetup.sandbox;
+
+      const bashResult = await sandbox.api.shell.executeCommand.mutate({
+        command: "bash test-script.sh",
+      });
+
+      const { stdout, stderr, exitCode } = await collectShellStream(bashResult);
+
+      expect(stdout.trim()).toEqual("Hello, World!");
+      expect(stderr.trim()).toEqual("");
+      expect(exitCode).toBe(0);
+    },
+    TEST_TIMEOUT
+  );
+
+  it(
+    "prevents read & write access to forbidden paths",
+    async () => {
+      const FORBIDDEN_READ_FILE_PATH = "forbidden-file.txt";
+
+      const FORBIDDEN_WRITE_FILE_PATH = "forbidden-write-file.txt";
+      const FORBIDDEN_WRITE_FILE_CONTENT = "This file should not be writable.";
+
+      using _workspaceSetup = setupTestWorkspace([
+        {
+          path: FORBIDDEN_READ_FILE_PATH,
+          content: "This file should not be accessible.",
+        },
+        {
+          path: FORBIDDEN_WRITE_FILE_PATH,
+          content: FORBIDDEN_WRITE_FILE_CONTENT,
+        },
+      ]);
+
+      await using testSetup = await setupTestSandbox(
+        "test-forbidden-read",
+        mockSandboxDefinition({
+          forbiddenPaths: [FORBIDDEN_READ_FILE_PATH, FORBIDDEN_WRITE_FILE_PATH],
+        })
+      );
+
+      const sandbox = testSetup.sandbox;
+
+      const fileReadPromise = sandbox.api.fileSystem.readFile.query({
+        path: FORBIDDEN_READ_FILE_PATH,
+      });
+
+      const fileWritePromise = sandbox.api.fileSystem.writeFile.mutate({
+        path: FORBIDDEN_WRITE_FILE_PATH,
+        content: "Trying to write to a forbidden file.",
+      });
+
+      await expect(fileReadPromise).rejects.toThrow();
+      await expect(fileWritePromise).rejects.toThrow();
+
+      const fileContent = fs.readFileSync(
+        path.join(TEST_SANDBOX_DIR, FORBIDDEN_WRITE_FILE_PATH),
+        "utf8"
+      );
+      expect(fileContent).toEqual(FORBIDDEN_WRITE_FILE_CONTENT);
+    },
+    TEST_TIMEOUT
+  );
+
+  it.skip(
+    "prevents executing commands in forbidden paths",
+    () => {},
+    TEST_TIMEOUT
+  );
 
   it.skip("isolates access to specified paths", () => {});
-
-  it.skip("installs dependencies from apt", () => {});
-
-  it.skip("installs dependencies from npm", () => {});
 });

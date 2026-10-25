@@ -10,10 +10,14 @@ export interface Dependencies {
   tsx: string;
 }
 
+export interface FileSystemSettings {
+  privatePaths: string[];
+  forbiddenPaths: string[];
+}
+
 export interface SandboxDefinition {
   name: string;
-  forbiddenPaths: string[];
-  isolatedPaths: string[];
+  fileSystemSettings: FileSystemSettings;
   dependencies: Dependencies;
   runAfterStart: string[];
 }
@@ -21,14 +25,16 @@ export interface SandboxDefinition {
 export function defineSandbox(definition: {
   name: string;
   forbiddenPaths?: string[];
-  isolatedPaths?: string[];
+  privatePaths?: string[];
   dependencies?: Partial<Dependencies>;
   runAfterStart?: string[];
 }): SandboxDefinition {
   return {
     name: definition.name,
-    forbiddenPaths: definition.forbiddenPaths ?? [],
-    isolatedPaths: definition.isolatedPaths ?? [],
+    fileSystemSettings: {
+      privatePaths: definition.privatePaths ?? [],
+      forbiddenPaths: definition.forbiddenPaths ?? [],
+    },
     dependencies: {
       node: DEFAULT_NODE_VERSION,
       npm: DEFAULT_NPM_VERSION,

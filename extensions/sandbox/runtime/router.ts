@@ -1,15 +1,12 @@
+import { adminRouter } from "./modules/admin";
 import { fileSystemRouter } from "./modules/fileSystem";
 import { shellRouter } from "./modules/shell";
-import { publicProcedure, router } from "./trpc";
-
-const getHeartbeat = publicProcedure.query(() => ({
-  isRunning: true,
-}));
+import { router } from "./trpc";
 
 export const appRouter = router({
   fileSystem: fileSystemRouter,
   shell: shellRouter,
-  getHeartbeat,
+  admin: adminRouter,
 });
 
 export type AppRouter = typeof appRouter;

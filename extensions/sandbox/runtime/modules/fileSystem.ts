@@ -1,40 +1,116 @@
 import z from "zod";
 import fs from "fs/promises";
-import { publicProcedure, router } from "../trpc";
+import { protectedProcedure, publicProcedure, router } from "../trpc";
+import { isPathForbidden } from "../utils/isPathForbidden";
 
-const readFile = publicProcedure
+const readFile = protectedProcedure
   .input(z.object({ path: z.string() }))
+  .output(
+    z.union([
+      z.object({ type: z.literal("success"), content: z.string() }),
+      z.object({ type: z.literal("error"), message: z.string() }),
+    ])
+  )
   .query(async ({ input }) => {
-    const content = await fs.readFile(input.path, "utf-8");
-    return content;
+    if (isPathForbidden(input.path)) {
+      return {
+        type: "error",
+        message: "ACCESS_DENIED",
+      };
+    }
+
+    try {
+      const stat = await fs.stat(input.path);
+
+      if (!stat.isFile()) {
+        return {
+          type: "error",
+          message: "NOT_A_FILE",
+        };
+      }
+    } catch {
+      return {
+        type: "error",
+        message: "FILE_NOT_FOUND",
+      };
+    }
+
+    try {
+      const content = await fs.readFile(input.path, "utf-8");
+      return {
+        type: "success",
+        content,
+      };
+    } catch {
+      return {
+        type: "error",
+        message: "FAILED_TO_READ_FILE",
+      };
+    }
   });
 
 const writeFile = publicProcedure
   .input(z.object({ path: z.string(), content: z.string() }))
+  .output(
+    z.union([
+      z.object({ type: z.literal("success") }),
+      z.object({ type: z.literal("error"), message: z.string() }),
+    ])
+  )
   .mutation(async ({ input }) => {
-    await fs.writeFile(input.path, input.content, "utf-8");
-    return { success: true };
-  });
-
-const OWNER_ONLY_ACCESS_BYTE = 0o700;
-const denyAccess = publicProcedure
-  .input(z.object({ glob: z.string() }))
-  .mutation(async ({ input }) => {
-    for await (const path of fs.glob(input.glob)) {
-      await fs.chmod(path, OWNER_ONLY_ACCESS_BYTE);
+    if (isPathForbidden(input.path)) {
+      return {
+        type: "error",
+        message: "ACCESS_DENIED",
+      };
     }
+
+    try {
+      await fs.writeFile(input.path, input.content, "utf-8");
+    } catch {
+      return {
+        type: "error",
+        message: "FAILED_TO_WRITE_FILE",
+      };
+    }
+
+    return {
+      type: "success",
+    };
   });
 
 const mkdir = publicProcedure
   .input(z.object({ path: z.string() }))
+  .output(
+    z.union([
+      z.object({ type: z.literal("success") }),
+      z.object({ type: z.literal("error"), message: z.string() }),
+    ])
+  )
   .mutation(async ({ input }) => {
-    await fs.mkdir(input.path, { recursive: true });
-    return { success: true };
+    if (isPathForbidden(input.path)) {
+      return {
+        type: "error",
+        message: "ACCESS_DENIED",
+      };
+    }
+
+    try {
+      await fs.mkdir(input.path, { recursive: true });
+    } catch {
+      return {
+        type: "error",
+        message: "FAILED_TO_CREATE_DIRECTORY",
+      };
+    }
+
+    return {
+      type: "success",
+    };
   });
 
 export const fileSystemRouter = router({
   readFile,
   writeFile,
-  denyAccess,
   mkdir,
 });

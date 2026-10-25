@@ -3,10 +3,8 @@ import { VolumeMount } from "./utils/dockerApi";
 import { SANDBOX_USER_ID } from "./constants";
 
 const SANDBOX_BASE_IMAGE = "debian:bookworm";
-const ESSENTIAL_DEPENDENCIES = `ca-certificates curl git bash ripgrep`;
+const ESSENTIAL_DEPENDENCIES = `libatomic1 ca-certificates curl git bash ripgrep`;
 const NVM_DIR = "/root/.nvm";
-
-const SETUP_NVM = `curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.6/install.sh | bash`;
 
 const installNode = (nodeVersion: string) => `
 RUN . "${NVM_DIR}/nvm.sh" && nvm install ${nodeVersion} && nvm use ${nodeVersion} && nvm alias default ${nodeVersion}
@@ -29,9 +27,11 @@ export function assembleSandboxDockerFile(
 
   RUN apt-get update && apt-get install -y ${ESSENTIAL_DEPENDENCIES} && rm -rf /var/lib/apt/lists/*
 
-  RUN ${SETUP_NVM}
+  ENV NVM_DIR=${NVM_DIR}
+  RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.6/install.sh | bash
 
   ${installNode(definition.dependencies.node)}
+
   ${installNpm(definition.dependencies.npm)}
   ${installTsx(definition.dependencies.tsx)}
 
@@ -45,7 +45,7 @@ export function assembleSandboxDockerFile(
 
   WORKDIR /workspace
 
-  CMD /runtime/node_modules/.bin/tsx /runtime/server.ts
+  CMD tsx /runtime/server.ts
   `;
 }
 

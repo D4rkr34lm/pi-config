@@ -1,6 +1,6 @@
 import z from "zod";
 import fs from "fs/promises";
-import { protectedProcedure, publicProcedure, router } from "../trpc";
+import { protectedProcedure, router } from "../trpc";
 import { isPathForbidden } from "../utils/isPathForbidden";
 
 const readFile = protectedProcedure
@@ -49,7 +49,7 @@ const readFile = protectedProcedure
     }
   });
 
-const writeFile = publicProcedure
+const writeFile = protectedProcedure
   .input(z.object({ path: z.string(), content: z.string() }))
   .output(
     z.union([
@@ -79,7 +79,7 @@ const writeFile = publicProcedure
     };
   });
 
-const mkdir = publicProcedure
+const mkdir = protectedProcedure
   .input(z.object({ path: z.string() }))
   .output(
     z.union([

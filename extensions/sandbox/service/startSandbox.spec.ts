@@ -5,9 +5,6 @@ import { startSandbox } from "./startSandbox";
 import fs from "fs";
 import path from "path";
 
-const TEST_SANDBOX_NAME = "test-sandbox";
-const TEST_SANDBOX_IMAGE = `pi-sandbox-${TEST_SANDBOX_NAME}:latest`;
-
 const TEST_SANDBOX_DIR = "./test-data/sandbox";
 
 const TEST_TIMEOUT = 60 * 1000; // 60 seconds
@@ -40,40 +37,23 @@ async function collectShellStream(
   return { stdout, stderr, exitCode };
 }
 
-function mockSandboxDefinition({
-  forbiddenPaths = [],
-  isolatedPaths = [],
-  runAfterStart = [],
-}: {
-  forbiddenPaths?: string[];
-  isolatedPaths?: string[];
-  runAfterStart?: string[];
-}) {
-  return defineSandbox({
-    name: TEST_SANDBOX_NAME,
-    forbiddenPaths,
-    isolatedPaths,
-    runAfterStart,
-  });
-}
-
 describe("start Sandbox", { concurrent: false }, () => {
+  const testImages = new Set<string>();
+
   afterAll(async () => {
     const dockerApi = useSimpleDockerApi();
     const images = await dockerApi.listImages();
 
-    if (images.includes(TEST_SANDBOX_IMAGE)) {
-      await dockerApi.removeImage(TEST_SANDBOX_IMAGE);
-    }
+    await Promise.all(
+      images
+        .filter((image) => testImages.has(image))
+        .map((image) => dockerApi.removeImage(image))
+    );
   });
 
-  async function setupTestSandbox(
-    testId: string,
-    sandboxDefinition: SandboxDefinition
-  ) {
-    const sandbox = await startSandbox(sandboxDefinition, TEST_SANDBOX_DIR, {
-      containerName: testId,
-    });
+  async function setupTestSandbox(sandboxDefinition: SandboxDefinition) {
+    testImages.add(`pi-sandbox-${sandboxDefinition.name}:latest`);
+    const sandbox = await startSandbox(sandboxDefinition, TEST_SANDBOX_DIR);
 
     return {
       sandbox,
@@ -105,46 +85,101 @@ describe("start Sandbox", { concurrent: false }, () => {
     "allows starting a sandbox",
     async () => {
       await using testSetup = await setupTestSandbox(
-        "test-start-sandbox",
-        mockSandboxDefinition({})
+        defineSandbox({ name: "test-start-sandbox" })
       );
 
       const sandbox = testSetup.sandbox;
 
-      await expect(sandbox.api.getHeartbeat.query()).resolves.toEqual({
-        isRunning: true,
+      await expect(sandbox.api.admin.isAvailable.query()).resolves.toEqual({
+        isAvailable: true,
       });
     },
     TEST_TIMEOUT
   );
 
   it(
-    "allows creating an reading a file in the sandbox",
+    "rejects invalid authentication for filesystem, shell, and admin operations",
     async () => {
+      using _workspaceSetup = setupTestWorkspace([
+        { path: "auth-test.txt", content: "Original content" },
+      ]);
+
       await using testSetup = await setupTestSandbox(
-        "test-create-file",
-        mockSandboxDefinition({})
+        defineSandbox({ name: "test-authentication" })
+      );
+      const sandbox = testSetup.sandbox;
+      const authToken = `${sandbox.authToken}-invalid`;
+
+      await Promise.all(
+        [
+          sandbox.api.fileSystem.readFile.query({
+            path: "auth-test.txt",
+            authToken,
+          }),
+          sandbox.api.fileSystem.writeFile.mutate({
+            path: "auth-test.txt",
+            content: "Unauthorized write",
+            authToken,
+          }),
+          sandbox.api.fileSystem.mkdir.mutate({
+            path: "unauthorized-directory",
+            authToken,
+          }),
+          sandbox.api.shell.executeCommand.mutate({
+            command: "printf 'Unauthorized command' > auth-test.txt",
+            authToken,
+          }),
+          sandbox.api.admin.setup.mutate({ forbiddenGlobs: [], authToken }),
+        ].map((result) =>
+          expect(result).rejects.toMatchObject({
+            data: { code: "UNAUTHORIZED" },
+          })
+        )
       );
 
-      const filePath = "/test-file.txt";
+      expect(
+        fs.readFileSync(path.join(TEST_SANDBOX_DIR, "auth-test.txt"), "utf8")
+      ).toBe("Original content");
+      expect(
+        fs.existsSync(path.join(TEST_SANDBOX_DIR, "unauthorized-directory"))
+      ).toBe(false);
+    },
+    TEST_TIMEOUT
+  );
+
+  it(
+    "allows creating a directory and writing and reading a file in the sandbox",
+    async () => {
+      await using testSetup = await setupTestSandbox(
+        defineSandbox({ name: "test-create-file" })
+      );
+
+      const filePath = "/test-directory/test-file.txt";
       const fileContent = "Hello, Sandbox!";
 
       const sandbox = testSetup.sandbox;
 
+      await expect(
+        sandbox.api.fileSystem.mkdir.mutate({
+          path: "/test-directory",
+          authToken: sandbox.authToken,
+        })
+      ).resolves.toEqual({ type: "success" });
+
       const fileWriteResult = await sandbox.api.fileSystem.writeFile.mutate({
         path: filePath,
         content: fileContent,
+        authToken: sandbox.authToken,
       });
 
-      expect(fileWriteResult).toEqual({
-        success: true,
-      });
+      expect(fileWriteResult).toEqual({ type: "success" });
 
       const fileReadResult = await sandbox.api.fileSystem.readFile.query({
         path: filePath,
+        authToken: sandbox.authToken,
       });
 
-      expect(fileReadResult).toEqual(fileContent);
+      expect(fileReadResult).toEqual({ type: "success", content: fileContent });
     },
     TEST_TIMEOUT
   );
@@ -163,17 +198,17 @@ describe("start Sandbox", { concurrent: false }, () => {
       ]);
 
       await using testSetup = await setupTestSandbox(
-        "test-read-workspace-file",
-        mockSandboxDefinition({})
+        defineSandbox({ name: "test-read-workspace-file" })
       );
 
       const sandbox = testSetup.sandbox;
 
       const fileReadResult = await sandbox.api.fileSystem.readFile.query({
         path: filePath,
+        authToken: sandbox.authToken,
       });
 
-      expect(fileReadResult).toEqual(fileContent);
+      expect(fileReadResult).toEqual({ type: "success", content: fileContent });
     },
     TEST_TIMEOUT
   );
@@ -192,8 +227,7 @@ describe("start Sandbox", { concurrent: false }, () => {
       ]);
 
       await using testSetup = await setupTestSandbox(
-        "test-edit-file",
-        mockSandboxDefinition({})
+        defineSandbox({ name: "test-edit-file" })
       );
 
       const sandbox = testSetup.sandbox;
@@ -201,11 +235,10 @@ describe("start Sandbox", { concurrent: false }, () => {
       const fileWriteResult = await sandbox.api.fileSystem.writeFile.mutate({
         path: filePath,
         content: targetContent,
+        authToken: sandbox.authToken,
       });
 
-      expect(fileWriteResult).toEqual({
-        success: true,
-      });
+      expect(fileWriteResult).toEqual({ type: "success" });
 
       const fileContent = fs.readFileSync(
         path.join(TEST_SANDBOX_DIR, filePath),
@@ -227,14 +260,14 @@ describe("start Sandbox", { concurrent: false }, () => {
       ]);
 
       await using testSetup = await setupTestSandbox(
-        "test-bash-command",
-        mockSandboxDefinition({})
+        defineSandbox({ name: "test-bash-command" })
       );
 
       const sandbox = testSetup.sandbox;
 
       const bashResult = await sandbox.api.shell.executeCommand.mutate({
         command: "bash test-script.sh",
+        authToken: sandbox.authToken,
       });
 
       const { stdout, stderr, exitCode } = await collectShellStream(bashResult);
@@ -247,7 +280,7 @@ describe("start Sandbox", { concurrent: false }, () => {
   );
 
   it(
-    "prevents read & write access to forbidden paths",
+    "prevents reading, writing, and creating forbidden paths",
     async () => {
       const FORBIDDEN_READ_FILE_PATH = "forbidden-file.txt";
 
@@ -266,9 +299,13 @@ describe("start Sandbox", { concurrent: false }, () => {
       ]);
 
       await using testSetup = await setupTestSandbox(
-        "test-forbidden-read",
-        mockSandboxDefinition({
-          forbiddenPaths: [FORBIDDEN_READ_FILE_PATH, FORBIDDEN_WRITE_FILE_PATH],
+        defineSandbox({
+          name: "test-forbidden-read",
+          forbiddenPaths: [
+            FORBIDDEN_READ_FILE_PATH,
+            FORBIDDEN_WRITE_FILE_PATH,
+            "forbidden-directory",
+          ],
         })
       );
 
@@ -276,30 +313,132 @@ describe("start Sandbox", { concurrent: false }, () => {
 
       const fileReadPromise = sandbox.api.fileSystem.readFile.query({
         path: FORBIDDEN_READ_FILE_PATH,
+        authToken: sandbox.authToken,
       });
 
       const fileWritePromise = sandbox.api.fileSystem.writeFile.mutate({
         path: FORBIDDEN_WRITE_FILE_PATH,
         content: "Trying to write to a forbidden file.",
+        authToken: sandbox.authToken,
       });
 
-      await expect(fileReadPromise).rejects.toThrow();
-      await expect(fileWritePromise).rejects.toThrow();
+      const mkdirPromise = sandbox.api.fileSystem.mkdir.mutate({
+        path: "forbidden-directory",
+        authToken: sandbox.authToken,
+      });
+
+      await Promise.all(
+        [fileReadPromise, fileWritePromise, mkdirPromise].map((result) =>
+          expect(result).resolves.toEqual({
+            type: "error",
+            message: "ACCESS_DENIED",
+          })
+        )
+      );
 
       const fileContent = fs.readFileSync(
         path.join(TEST_SANDBOX_DIR, FORBIDDEN_WRITE_FILE_PATH),
         "utf8"
       );
       expect(fileContent).toEqual(FORBIDDEN_WRITE_FILE_CONTENT);
+      expect(
+        fs.existsSync(path.join(TEST_SANDBOX_DIR, "forbidden-directory"))
+      ).toBe(false);
     },
     TEST_TIMEOUT
   );
 
-  it.skip(
+  it(
     "prevents executing commands in forbidden paths",
-    () => {},
+    async () => {
+      using _workspaceSetup = setupTestWorkspace([
+        {
+          path: "forbidden-command.sh",
+          content: "#!/bin/bash\necho 'This command should not be executable.'",
+        },
+      ]);
+
+      await using testSetup = await setupTestSandbox(
+        defineSandbox({
+          name: "test-forbidden-command",
+          forbiddenPaths: ["forbidden-command.sh"],
+        })
+      );
+
+      const sandbox = testSetup.sandbox;
+
+      const bashResult = await sandbox.api.shell.executeCommand.mutate({
+        command: "bash forbidden-command.sh",
+        authToken: sandbox.authToken,
+      });
+
+      const { stdout, stderr, exitCode } = await collectShellStream(bashResult);
+
+      expect(stdout.trim()).toEqual("");
+      expect(stderr.trim()).toContain("Permission denied");
+      expect(exitCode).not.toBeNull();
+      expect(exitCode).not.toBe(0);
+    },
     TEST_TIMEOUT
   );
 
-  it.skip("isolates access to specified paths", () => {});
+  it(
+    "allows declaring sandbox private paths",
+    async () => {
+      const workspacePrivateFileContent = "This is a private file.";
+      const containerPrivateFileContent =
+        "This is a private file inside the container.";
+
+      using _workspaceSetup = setupTestWorkspace([
+        {
+          path: "private/test.txt",
+          content: workspacePrivateFileContent,
+        },
+      ]);
+
+      await using testSetup = await setupTestSandbox(
+        defineSandbox({
+          name: "test-private-paths",
+          privatePaths: ["/workspace/private"],
+        })
+      );
+
+      const sandbox = testSetup.sandbox;
+
+      await expect(
+        sandbox.api.fileSystem.readFile.query({
+          path: "/workspace/private/test.txt",
+          authToken: sandbox.authToken,
+        })
+      ).resolves.toEqual({ type: "error", message: "FILE_NOT_FOUND" });
+
+      await expect(
+        sandbox.api.fileSystem.writeFile.mutate({
+          path: "/workspace/private/test.txt",
+          content: containerPrivateFileContent,
+          authToken: sandbox.authToken,
+        })
+      ).resolves.toEqual({ type: "success" });
+
+      const sandboxFileReadResult = await sandbox.api.fileSystem.readFile.query(
+        {
+          path: "/workspace/private/test.txt",
+          authToken: sandbox.authToken,
+        }
+      );
+
+      const fileContentInWorkspace = fs.readFileSync(
+        path.join(TEST_SANDBOX_DIR, "private/test.txt"),
+        "utf8"
+      );
+
+      expect(fileContentInWorkspace).toEqual(workspacePrivateFileContent);
+
+      expect(sandboxFileReadResult).toEqual({
+        type: "success",
+        content: containerPrivateFileContent,
+      });
+    },
+    TEST_TIMEOUT
+  );
 });

@@ -13,6 +13,8 @@ import { useSimpleDockerApi, VolumeMount } from "./utils/dockerApi";
 import { SANDBOX_API_PORT, SANDBOX_WORKING_DIR } from "./constants";
 import path from "path";
 import { fileURLToPath } from "url";
+import { range } from "lodash-es";
+import { randomUUID } from "crypto";
 
 function getSandboxImageTag(definition: SandboxDefinition) {
   return `pi-sandbox-${definition.name}:latest`;
@@ -57,12 +59,18 @@ async function doesSandboxImageExist(imageTag: string): Promise<boolean> {
   return allImages.some((image) => image.includes(imageTag));
 }
 
+function getSandboxPort() {
+  const portRange = range(30000, 40000);
+  const randomIndex = Math.floor(Math.random() * portRange.length);
+  return portRange[randomIndex] ?? 30000;
+}
+
 export interface Sandbox {
   workspacePath: string;
   definition: SandboxDefinition;
+  authToken: string;
   api: TRPCClient<AppRouter>;
   stop: () => Promise<void>;
-  isPathProtected: (path: string) => boolean;
 }
 
 export async function startSandbox(
@@ -87,13 +95,15 @@ export async function startSandbox(
     ...assemblePrivateVolumeMounts(definition),
   ];
 
+  const sandboxPort = getSandboxPort();
+
   const containerId = await dockerApi.runContainer({
     containerName: `pi-sandbox-${definition.name}`,
     image: imageTag,
     volumes: volumeMounts,
     ports: [
       {
-        hostPort: SANDBOX_API_PORT,
+        hostPort: sandboxPort,
         containerPort: SANDBOX_API_PORT,
       },
     ],
@@ -102,7 +112,7 @@ export async function startSandbox(
   const sandboxApi = createTRPCClient<AppRouter>({
     links: [
       httpBatchStreamLink({
-        url: `http://localhost:${SANDBOX_API_PORT}`,
+        url: `http://localhost:${sandboxPort}`,
       }),
     ],
   });
@@ -112,35 +122,31 @@ export async function startSandbox(
     await dockerApi.removeContainer(containerId);
   };
 
-  const forbiddenGlobs = ["/runtime/**", ...definition.forbiddenPaths];
-
   try {
     await waitForSandboxApi(sandboxApi);
 
-    await Promise.all(
-      forbiddenGlobs.map((glob) =>
-        sandboxApi.fileSystem.denyAccess.mutate({ glob })
-      )
-    );
-    await Promise.all(
-      definition.runAfterStart.map((command) =>
-        sandboxApi.shell.executeCommand.mutate({ command })
-      )
-    );
+    const authToken = randomUUID();
+    await sandboxApi.admin.setup.mutate({
+      authToken,
+      forbiddenGlobs: definition.fileSystemSettings.forbiddenPaths,
+    });
+
+    definition.runAfterStart.forEach(async (command) => {
+      await sandboxApi.shell.executeCommand.mutate({
+        authToken,
+        command,
+      });
+    });
+
+    return {
+      workspacePath,
+      definition,
+      authToken,
+      api: sandboxApi,
+      stop: stopContainer,
+    };
   } catch (error) {
     await stopContainer();
     throw error;
   }
-
-  return {
-    workspacePath,
-    definition,
-    api: sandboxApi,
-    stop: stopContainer,
-    isPathProtected: (absolutePath: string) => {
-      return forbiddenGlobs.some((glob) =>
-        path.matchesGlob(absolutePath, glob)
-      );
-    },
-  };
 }

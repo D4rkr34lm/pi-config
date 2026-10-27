@@ -142,7 +142,10 @@ export async function startSandbox(
 
     await sandboxApi.admin.setup.mutate({
       authToken,
-      forbiddenGlobs: definition.fileSystemSettings.forbiddenPaths,
+      forbiddenGlobs: [
+        "/runtime/**",
+        ...definition.fileSystemSettings.forbiddenPaths,
+      ],
     });
 
     definition.runAfterStart.forEach(async (command) => {

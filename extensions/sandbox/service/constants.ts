@@ -4,6 +4,7 @@ import path from "path";
 export const SANDBOX_USER_ID = 1001;
 
 export const SANDBOX_API_PORT = 3000;
+export const SANDBOX_RUNTIME_PATH = "/runtime";
 export const SANDBOX_WORKING_DIR = "/workspace";
 
 export const PI_CONFIG_DIR = path.join(os.homedir(), ".pi", "agent");

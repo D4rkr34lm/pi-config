@@ -442,4 +442,51 @@ describe("start Sandbox", { concurrent: false }, () => {
     },
     TEST_TIMEOUT
   );
+
+  it(
+    "prevents manipulating the runtime",
+    async () => {
+      await using testSetup = await setupTestSandbox(
+        defineSandbox({ name: "test-runtime-manipulation" })
+      );
+
+      const sandbox = testSetup.sandbox;
+
+      const readRuntimeResult = await sandbox.api.fileSystem.readFile.query({
+        path: "/runtime/server.ts",
+        authToken: sandbox.authToken,
+      });
+
+      expect(readRuntimeResult).toEqual({
+        type: "error",
+        message: "ACCESS_DENIED",
+      });
+
+      const writeRuntimeResult = await sandbox.api.fileSystem.writeFile.mutate({
+        path: "/runtime/server.ts",
+        content: "console.log('Malicious code');",
+        authToken: sandbox.authToken,
+      });
+
+      expect(writeRuntimeResult).toEqual({
+        type: "error",
+        message: "ACCESS_DENIED",
+      });
+
+      const commandRuntimeResult =
+        await sandbox.api.shell.executeCommand.mutate({
+          command: "echo 'Malicious command' > /runtime/malicious.txt",
+          authToken: sandbox.authToken,
+        });
+
+      const { stdout, stderr, exitCode } =
+        await collectShellStream(commandRuntimeResult);
+
+      expect(stdout.trim()).toEqual("");
+      expect(stderr.trim()).toContain("Permission denied");
+      expect(exitCode).not.toBeNull();
+      expect(exitCode).not.toBe(0);
+    },
+    TEST_TIMEOUT
+  );
 });

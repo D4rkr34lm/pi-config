@@ -10,7 +10,7 @@ import {
   assembleSandboxDockerFile,
 } from "./assembleSandboxImage";
 import { useSimpleDockerApi, VolumeMount } from "./utils/dockerApi";
-import { SANDBOX_API_PORT, SANDBOX_WORKING_DIR } from "./constants";
+import { SANDBOX_WORKING_DIR } from "./constants";
 import path from "path";
 import { fileURLToPath } from "url";
 import { range } from "lodash-es";
@@ -33,8 +33,16 @@ async function waitForSandboxApi(
     try {
       await sandboxApi.admin.isAvailable.query();
       return;
-    } catch {
+    } catch (error) {
       attempts--;
+      if (attempts === 0) {
+        throw new Error(
+          "Sandbox API did not become available after 100 attempts",
+          {
+            cause: error,
+          }
+        );
+      }
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
   }
@@ -96,15 +104,17 @@ export async function startSandbox(
   ];
 
   const sandboxPort = getSandboxPort();
+  const authToken = randomUUID();
 
   const containerId = await dockerApi.runContainer({
     containerName: `pi-sandbox-${definition.name}`,
     image: imageTag,
+    env: { SANDBOX_AUTH_TOKEN: authToken, PORT: sandboxPort.toString() },
     volumes: volumeMounts,
     ports: [
       {
         hostPort: sandboxPort,
-        containerPort: SANDBOX_API_PORT,
+        containerPort: sandboxPort,
       },
     ],
   });
@@ -125,7 +135,6 @@ export async function startSandbox(
   try {
     await waitForSandboxApi(sandboxApi);
 
-    const authToken = randomUUID();
     await sandboxApi.admin.setup.mutate({
       authToken,
       forbiddenGlobs: definition.fileSystemSettings.forbiddenPaths,

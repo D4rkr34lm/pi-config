@@ -41,8 +41,9 @@ export function useSimpleDockerApi() {
     image: string;
     volumes: VolumeMount[];
     ports: PortMapping[];
+    env: Record<string, string>;
   }): Promise<string> => {
-    const { containerName, image, volumes, ports } = args;
+    const { containerName, image, volumes, ports, env = {} } = args;
 
     const volumeArgs = volumes.flatMap((volume) => [
       "-v",
@@ -54,6 +55,11 @@ export function useSimpleDockerApi() {
       `${port.hostPort}:${port.containerPort}`,
     ]);
 
+    const envArgs = Object.entries(env).flatMap(([name, value]) => [
+      "--env",
+      `${name}=${value}`,
+    ]);
+
     const nameArgs = hasValue(containerName) ? ["--name", containerName] : [];
 
     const { stdout } = await execFile("docker", [
@@ -62,6 +68,7 @@ export function useSimpleDockerApi() {
       ...nameArgs,
       ...volumeArgs,
       ...portArgs,
+      ...envArgs,
       image,
     ]);
 

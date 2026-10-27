@@ -44,11 +44,12 @@ describe("start Sandbox", { concurrent: false }, () => {
     const dockerApi = useSimpleDockerApi();
     const images = await dockerApi.listImages();
 
-    await Promise.all(
-      images
-        .filter((image) => testImages.has(image))
-        .map((image) => dockerApi.removeImage(image))
-    );
+    await images
+      .filter((image) => testImages.has(image))
+      .reduce(async (previousRemoval, image) => {
+        await previousRemoval;
+        await dockerApi.removeImage(image);
+      }, Promise.resolve());
   });
 
   async function setupTestSandbox(sandboxDefinition: SandboxDefinition) {

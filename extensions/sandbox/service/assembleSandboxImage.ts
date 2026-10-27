@@ -1,5 +1,4 @@
 import { SandboxDefinition } from "./defineSandbox";
-import { VolumeMount } from "./utils/dockerApi";
 import { SANDBOX_USER_ID } from "./constants";
 
 const SANDBOX_BASE_IMAGE = "debian:bookworm";
@@ -47,13 +46,4 @@ export function assembleSandboxDockerFile(
 
   CMD tsx /runtime/server.ts
   `;
-}
-
-export function assemblePrivateVolumeMounts(
-  sandboxDefinition: SandboxDefinition
-): VolumeMount[] {
-  return sandboxDefinition.fileSystemSettings.privatePaths.map((path) => ({
-    source: path,
-    target: path,
-  }));
 }

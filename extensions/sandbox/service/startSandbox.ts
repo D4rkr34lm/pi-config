@@ -5,11 +5,8 @@ import {
   TRPCClient,
 } from "@trpc/client";
 import { SandboxDefinition } from "./defineSandbox";
-import {
-  assemblePrivateVolumeMounts,
-  assembleSandboxDockerFile,
-} from "./assembleSandboxImage";
-import { useSimpleDockerApi, VolumeMount } from "./utils/dockerApi";
+import { assembleSandboxDockerFile } from "./assembleSandboxImage";
+import { useSimpleDockerApi, Volume } from "./utils/dockerApi";
 import { SANDBOX_WORKING_DIR } from "./constants";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -73,6 +70,14 @@ function getSandboxPort() {
   return portRange[randomIndex] ?? 30000;
 }
 
+export function assemblePrivateVolumeMounts(
+  sandboxDefinition: SandboxDefinition
+): Volume[] {
+  return sandboxDefinition.fileSystemSettings.privatePaths.map((path) => ({
+    target: path,
+  }));
+}
+
 export interface Sandbox {
   workspacePath: string;
   definition: SandboxDefinition;
@@ -95,7 +100,7 @@ export async function startSandbox(
     await buildSandboxImage(definition);
   }
 
-  const volumeMounts: VolumeMount[] = [
+  const volumes: Volume[] = [
     {
       source: path.resolve(workspacePath),
       target: SANDBOX_WORKING_DIR,
@@ -110,7 +115,7 @@ export async function startSandbox(
     containerName: `pi-sandbox-${definition.name}`,
     image: imageTag,
     env: { SANDBOX_AUTH_TOKEN: authToken, PORT: sandboxPort.toString() },
-    volumes: volumeMounts,
+    volumes,
     ports: [
       {
         hostPort: sandboxPort,

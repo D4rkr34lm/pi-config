@@ -4,9 +4,9 @@ import { hasValue } from "../../../../utils/type-guards";
 
 const execFile = promisify(execFileCallback);
 
-export interface VolumeMount {
-  source: string;
+export interface Volume {
   target: string;
+  source?: string;
 }
 
 interface PortMapping {
@@ -39,7 +39,7 @@ export function useSimpleDockerApi() {
   const runContainer = async (args: {
     containerName?: string;
     image: string;
-    volumes: VolumeMount[];
+    volumes: Volume[];
     ports: PortMapping[];
     env: Record<string, string>;
   }): Promise<string> => {
@@ -47,7 +47,9 @@ export function useSimpleDockerApi() {
 
     const volumeArgs = volumes.flatMap((volume) => [
       "-v",
-      `${volume.source}:${volume.target}`,
+      hasValue(volume.source)
+        ? `${volume.source}:${volume.target}`
+        : volume.target,
     ]);
 
     const portArgs = ports.flatMap((port) => [
@@ -80,7 +82,7 @@ export function useSimpleDockerApi() {
   };
 
   const removeContainer = async (containerId: string): Promise<void> => {
-    await execFile("docker", ["rm", containerId]);
+    await execFile("docker", ["rm", "-v", containerId]);
   };
 
   const listContainers = async (

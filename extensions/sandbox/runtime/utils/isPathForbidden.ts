@@ -1,8 +1,14 @@
 import { storage } from "../storage";
-import { matchesGlob } from "path";
+import nodePath, { matchesGlob } from "path";
+import { some } from "lodash-es";
 
 export function isPathForbidden(path: string): boolean {
-  const { forbiddenGlobs } = storage;
+  const absolutePath = nodePath.resolve(path);
 
-  return forbiddenGlobs.some((glob) => matchesGlob(path, glob));
+  return some(
+    storage.forbiddenGlobs,
+    (glob) =>
+      matchesGlob(path, glob) ||
+      matchesGlob(absolutePath, nodePath.resolve(glob))
+  );
 }

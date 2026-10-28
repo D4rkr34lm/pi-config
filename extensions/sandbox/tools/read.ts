@@ -1,7 +1,20 @@
 import { createReadTool } from "@earendil-works/pi-coding-agent";
 import { Sandbox } from "../service/startSandbox";
-import { mapHostPathToSandboxPath } from "./utils";
+import {
+  ensureSandboxOperationSucceeded,
+  mapHostPathToSandboxPath,
+} from "./utils";
 import { SANDBOX_WORKING_DIR } from "../service/constants";
+import path from "path";
+
+const imageMimeTypesByExtension: Record<string, string> = {
+  ".bmp": "image/bmp",
+  ".gif": "image/gif",
+  ".jpeg": "image/jpeg",
+  ".jpg": "image/jpeg",
+  ".png": "image/png",
+  ".webp": "image/webp",
+};
 
 export function buildSandboxedReadTool(sandbox: Sandbox) {
   const cwd = sandbox.workspacePath;
@@ -9,19 +22,11 @@ export function buildSandboxedReadTool(sandbox: Sandbox) {
   const sandboxedReadTool = createReadTool(cwd, {
     operations: {
       access: async (absolutePath: string) => {
-        const isFileProtected = sandbox.isPathProtected(absolutePath);
-
-        const isFileOutsideOfWorkspace = !absolutePath.startsWith(cwd);
-
-        if (isFileOutsideOfWorkspace) {
-          throw new Error(
-            `Access denied: ${absolutePath} is outside of the workspace.`
-          );
-        } else if (isFileProtected) {
-          throw new Error(
-            `Access denied: ${absolutePath} is a protected path.`
-          );
-        }
+        mapHostPathToSandboxPath({
+          hostWorkingDir: cwd,
+          sandboxWorkingDir: SANDBOX_WORKING_DIR,
+          hostPath: absolutePath,
+        });
       },
       readFile: async (absolutePath: string) => {
         const sandboxPath = mapHostPathToSandboxPath({
@@ -30,12 +35,17 @@ export function buildSandboxedReadTool(sandbox: Sandbox) {
           hostPath: absolutePath,
         });
 
-        const fileContent = await sandbox.api.fileSystem.readFile.query({
+        const result = await sandbox.api.fileSystem.readFile.query({
+          authToken: sandbox.authToken,
           path: sandboxPath,
+          encoding: "base64",
         });
 
-        return Buffer.from(fileContent);
+        ensureSandboxOperationSucceeded(result);
+        return Buffer.from(result.content, "base64");
       },
+      detectImageMimeType: async (absolutePath: string) =>
+        imageMimeTypesByExtension[path.extname(absolutePath).toLowerCase()],
     },
   });
 

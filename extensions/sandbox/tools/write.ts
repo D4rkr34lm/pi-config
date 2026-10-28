@@ -1,7 +1,10 @@
 import { createWriteTool } from "@earendil-works/pi-coding-agent";
 import { Sandbox } from "../service/startSandbox";
 import { SANDBOX_WORKING_DIR } from "../service/constants";
-import { mapHostPathToSandboxPath } from "./utils";
+import {
+  ensureSandboxOperationSucceeded,
+  mapHostPathToSandboxPath,
+} from "./utils";
 
 export function buildSandboxedWriteTool(sandbox: Sandbox) {
   const cwd = sandbox.workspacePath;
@@ -9,16 +12,19 @@ export function buildSandboxedWriteTool(sandbox: Sandbox) {
 
   const sandboxedWriteTool = createWriteTool(cwd, {
     operations: {
-      mkdir: async (path: string) => {
-        if (sandbox.isPathProtected(path)) {
-          throw new Error(`Access denied: ${path} is a protected path.`);
-        } else if (!path.startsWith(cwd)) {
-          throw new Error(
-            `Access denied: ${path} is outside of the workspace.`
-          );
-        }
+      mkdir: async (absolutePath: string) => {
+        const sandboxPath = mapHostPathToSandboxPath({
+          hostWorkingDir: cwd,
+          sandboxWorkingDir: SANDBOX_WORKING_DIR,
+          hostPath: absolutePath,
+        });
 
-        await sandboxApi.fileSystem.mkdir.mutate({ path });
+        const result = await sandboxApi.fileSystem.mkdir.mutate({
+          authToken: sandbox.authToken,
+          path: sandboxPath,
+        });
+
+        ensureSandboxOperationSucceeded(result);
       },
       writeFile: async (absolutePath: string, content: string) => {
         const sandboxPath = mapHostPathToSandboxPath({
@@ -27,10 +33,13 @@ export function buildSandboxedWriteTool(sandbox: Sandbox) {
           hostPath: absolutePath,
         });
 
-        await sandboxApi.fileSystem.writeFile.mutate({
+        const result = await sandboxApi.fileSystem.writeFile.mutate({
+          authToken: sandbox.authToken,
           path: sandboxPath,
           content,
         });
+
+        ensureSandboxOperationSucceeded(result);
       },
     },
   });

@@ -4,7 +4,12 @@ import { protectedProcedure, router } from "../trpc";
 import { isPathForbidden } from "../utils/isPathForbidden";
 
 const readFile = protectedProcedure
-  .input(z.object({ path: z.string() }))
+  .input(
+    z.object({
+      path: z.string(),
+      encoding: z.enum(["utf8", "base64"]).optional(),
+    })
+  )
   .output(
     z.union([
       z.object({ type: z.literal("success"), content: z.string() }),
@@ -36,7 +41,7 @@ const readFile = protectedProcedure
     }
 
     try {
-      const content = await fs.readFile(input.path, "utf-8");
+      const content = await fs.readFile(input.path, input.encoding ?? "utf8");
       return {
         type: "success",
         content,

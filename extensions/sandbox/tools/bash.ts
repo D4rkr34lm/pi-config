@@ -1,5 +1,8 @@
 import { createBashTool } from "@earendil-works/pi-coding-agent";
 import { Sandbox } from "../service/startSandbox";
+import { SANDBOX_WORKING_DIR } from "../service/constants";
+import { mapHostPathToSandboxPath } from "./utils";
+import { pickBy } from "lodash-es";
 
 export function buildSandboxedBashTool(sandbox: Sandbox) {
   const cwd = sandbox.workspacePath;
@@ -7,15 +10,25 @@ export function buildSandboxedBashTool(sandbox: Sandbox) {
 
   const sandboxedBashTool = createBashTool(cwd, {
     operations: {
-      exec: async (command, cwd, { onData, env, signal, timeout }) => {
+      exec: async (command, commandCwd, { onData, env, signal, timeout }) => {
+        const sandboxCwd = mapHostPathToSandboxPath({
+          hostWorkingDir: cwd,
+          sandboxWorkingDir: SANDBOX_WORKING_DIR,
+          hostPath: commandCwd,
+        });
+        const sandboxEnvironment = pickBy(env, (_value, name) =>
+          name.startsWith("PI_")
+        );
         const commandOutputStream =
           await sandboxApi.shell.executeCommand.mutate(
             {
+              authToken: sandbox.authToken,
               command,
+              cwd: sandboxCwd,
               timeout,
-              env,
+              env: sandboxEnvironment,
             },
-            { signal: signal }
+            { signal }
           );
 
         for await (const data of commandOutputStream) {

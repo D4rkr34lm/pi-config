@@ -1,19 +1,22 @@
 import { spawn } from "child_process";
 import { protectedProcedure, router } from "../trpc";
 import z from "zod";
-import { toString } from "lodash-es";
+import { omit, toString } from "lodash-es";
 import { SANDBOX_USER_ID } from "../constants";
+
+const commandEnvironment = omit(process.env, "SANDBOX_AUTH_TOKEN");
 
 const executeCommand = protectedProcedure
   .input(
     z.object({
       command: z.string(),
+      cwd: z.string().optional(),
       timeout: z.number().optional(),
       env: z.record(z.string(), z.string().optional()).optional(),
     })
   )
   .mutation(async function* ({ input, signal }) {
-    const { command, timeout, env } = input;
+    const { command, cwd, timeout, env } = input;
 
     if (signal?.aborted) {
       return;
@@ -21,8 +24,9 @@ const executeCommand = protectedProcedure
 
     const commandProcess = spawn(command, {
       shell: true,
-      env: env,
-      timeout,
+      cwd,
+      env: { ...commandEnvironment, ...env },
+      timeout: timeout === undefined ? undefined : timeout * 1000,
       uid: SANDBOX_USER_ID,
     });
 

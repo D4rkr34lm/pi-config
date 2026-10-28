@@ -313,18 +313,18 @@ describe("start Sandbox", { concurrent: false }, () => {
       const sandbox = testSetup.sandbox;
 
       const fileReadPromise = sandbox.api.fileSystem.readFile.query({
-        path: FORBIDDEN_READ_FILE_PATH,
+        path: `/workspace/${FORBIDDEN_READ_FILE_PATH}`,
         authToken: sandbox.authToken,
       });
 
       const fileWritePromise = sandbox.api.fileSystem.writeFile.mutate({
-        path: FORBIDDEN_WRITE_FILE_PATH,
+        path: `/workspace/${FORBIDDEN_WRITE_FILE_PATH}`,
         content: "Trying to write to a forbidden file.",
         authToken: sandbox.authToken,
       });
 
       const mkdirPromise = sandbox.api.fileSystem.mkdir.mutate({
-        path: "forbidden-directory",
+        path: "/workspace/forbidden-directory",
         authToken: sandbox.authToken,
       });
 

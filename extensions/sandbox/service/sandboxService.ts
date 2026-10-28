@@ -17,7 +17,7 @@ export interface SandboxServiceContext {
   sandboxDefinitions?: Record<string, SandboxDefinition>;
 }
 
-export async function useSandboxService(context: SandboxServiceContext) {
+export async function useSandboxService(context: SandboxServiceContext = {}) {
   const sandboxConfig = context.sandboxConfig ?? loadSandboxesConfig();
   const sandboxDefinitions =
     context.sandboxDefinitions ?? (await loadSandboxDefinitions());

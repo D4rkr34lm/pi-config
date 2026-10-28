@@ -55,6 +55,7 @@ describe("Simple docker API", () => {
     const containerId = await sut.runContainer({
       containerName: MOCK_CONTAINER_NAME,
       image: MOCK_TAG,
+      env: {},
       volumes: [],
       ports: [],
     });

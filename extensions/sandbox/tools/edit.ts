@@ -1,6 +1,9 @@
 import { createEditTool } from "@earendil-works/pi-coding-agent";
 import { Sandbox } from "../service/startSandbox";
-import { mapHostPathToSandboxPath } from "./utils";
+import {
+  ensureSandboxOperationSucceeded,
+  mapHostPathToSandboxPath,
+} from "./utils";
 import { SANDBOX_WORKING_DIR } from "../service/constants";
 
 export function buildSandboxedEditTool(sandbox: Sandbox) {
@@ -10,15 +13,11 @@ export function buildSandboxedEditTool(sandbox: Sandbox) {
   const sandboxedEditTool = createEditTool(cwd, {
     operations: {
       access: async (absolutePath: string) => {
-        if (sandbox.isPathProtected(absolutePath)) {
-          throw new Error(
-            `Access denied: ${absolutePath} is a protected path.`
-          );
-        } else if (!absolutePath.startsWith(cwd)) {
-          throw new Error(
-            `Access denied: ${absolutePath} is outside of the workspace.`
-          );
-        }
+        mapHostPathToSandboxPath({
+          hostWorkingDir: cwd,
+          sandboxWorkingDir: SANDBOX_WORKING_DIR,
+          hostPath: absolutePath,
+        });
       },
       readFile: async (absolutePath: string) => {
         const sandboxPath = mapHostPathToSandboxPath({
@@ -27,11 +26,13 @@ export function buildSandboxedEditTool(sandbox: Sandbox) {
           hostPath: absolutePath,
         });
 
-        const fileContent = await sandboxApi.fileSystem.readFile.query({
+        const result = await sandboxApi.fileSystem.readFile.query({
+          authToken: sandbox.authToken,
           path: sandboxPath,
         });
 
-        return Buffer.from(fileContent);
+        ensureSandboxOperationSucceeded(result);
+        return Buffer.from(result.content);
       },
       writeFile: async (absolutePath: string, content: string) => {
         const sandboxPath = mapHostPathToSandboxPath({
@@ -40,10 +41,13 @@ export function buildSandboxedEditTool(sandbox: Sandbox) {
           hostPath: absolutePath,
         });
 
-        await sandboxApi.fileSystem.writeFile.mutate({
+        const result = await sandboxApi.fileSystem.writeFile.mutate({
+          authToken: sandbox.authToken,
           path: sandboxPath,
           content,
         });
+
+        ensureSandboxOperationSucceeded(result);
       },
     },
   });

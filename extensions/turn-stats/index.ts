@@ -1,77 +1,69 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { Usage } from "@earendil-works/pi-ai";
+import type {
+  ExtensionAPI,
+  SessionEntry,
+} from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
 import { first } from "lodash-es";
+import {
+  formatDuration,
+  formatStartTime,
+  formatTokens,
+} from "../../utils/formatting";
 import { hasValue } from "../../utils/type-guards";
 
-const ASSISTANT_TURN_START_ENTRY_TYPE = "assistant-turn-start";
-const ASSISTANT_TURN_END_ENTRY_TYPE = "assistant-turn-end";
+const AGENT_WORK_START_ENTRY_TYPE = "agent-work-start";
+const AGENT_WORK_STATS_ENTRY_TYPE = "agent-work-stats";
 
-interface TurnStats {
-  turnStart: string;
-  turnEndTimestamp: string;
+interface AgentWorkStats {
+  startedAt: string;
+  endedAt: string;
   durationMs: number;
   inputTokens: number;
   outputTokens: number;
 }
 
-function formatDuration(durationMs: number): string {
-  if (durationMs < 1_000) return `${Math.round(durationMs)}ms`;
-
-  const seconds = durationMs / 1_000;
-  if (seconds < 60) return `${seconds.toFixed(seconds < 10 ? 1 : 0)}s`;
-
-  const wholeMinutes = Math.floor(seconds / 60);
-  const remainingSeconds = Math.round(seconds % 60);
-  return `${wholeMinutes}m ${remainingSeconds}s`;
-}
-
-function formatTokens(tokens: number): string {
-  if (tokens < 1_000) return tokens.toString();
-  if (tokens < 10_000) return `${(tokens / 1_000).toFixed(1)}k`;
-  if (tokens < 1_000_000) return `${Math.round(tokens / 1_000)}k`;
-  if (tokens < 10_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
-  return `${Math.round(tokens / 1_000_000)}M`;
-}
-
-function formatStartTime(timestamp: string): string {
-  return new Date(timestamp).toLocaleTimeString(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
+function extractUsages(entries: readonly SessionEntry[]): Usage[] {
+  return entries.flatMap((entry) => {
+    if (entry.type === "usage") return [entry.usage];
+    if (entry.type === "compaction" || entry.type === "branch_summary") {
+      return entry.usage ? [entry.usage] : [];
+    }
+    if (entry.type !== "message") return [];
+    if (entry.message.role === "assistant") return [entry.message.usage];
+    if (entry.message.role === "toolResult" && entry.message.usage) {
+      return [entry.message.usage];
+    }
+    return [];
   });
 }
 
 export default function (pi: ExtensionAPI) {
-  pi.on("turn_start", () => {
-    pi.appendEntry(ASSISTANT_TURN_START_ENTRY_TYPE);
+  pi.on("before_agent_start", () => {
+    pi.appendEntry(AGENT_WORK_START_ENTRY_TYPE);
   });
 
-  pi.on("turn_end", (event, ctx) => {
-    if (event.message.role !== "assistant") return;
-
-    const latestAssistantTurnStartEntry = first(
-      ctx.sessionManager
-        .getBranch()
+  pi.on("agent_before_settle", (event, ctx) => {
+    if (event.continue) return;
+    const branch = ctx.sessionManager.getBranch();
+    const latestAgentWorkStartEntry = first(
+      branch
         .filter(
           (entry) =>
             entry.type === "custom" &&
-            entry.customType === ASSISTANT_TURN_START_ENTRY_TYPE
+            entry.customType === AGENT_WORK_START_ENTRY_TYPE
         )
         .sort((a, b) =>
           new Date(a.timestamp) > new Date(b.timestamp) ? -1 : 1
         )
     );
 
-    if (!hasValue(latestAssistantTurnStartEntry)) return;
+    if (!hasValue(latestAgentWorkStartEntry)) return;
 
-    const start = new Date(latestAssistantTurnStartEntry.timestamp);
-    const end = new Date();
-    const usages = [
-      event.message.usage,
-      ...event.toolResults.flatMap((result) =>
-        result.usage ? [result.usage] : []
-      ),
-    ];
+    const startEntryIndex = branch.findIndex(
+      (entry) => entry.id === latestAgentWorkStartEntry.id
+    );
+    const usages = extractUsages(branch.slice(startEntryIndex + 1));
     const tokenUsage = usages.reduce(
       (total, usage) => ({
         input: total.input + usage.input,
@@ -79,18 +71,28 @@ export default function (pi: ExtensionAPI) {
       }),
       { input: 0, output: 0 }
     );
+    const start = new Date(latestAgentWorkStartEntry.timestamp);
+    const end = new Date();
 
-    pi.appendEntry(ASSISTANT_TURN_END_ENTRY_TYPE, {
-      turnStart: start.toISOString(),
-      turnEndTimestamp: end.toISOString(),
-      durationMs: Math.max(0, end.getTime() - start.getTime()),
-      inputTokens: tokenUsage.input,
-      outputTokens: tokenUsage.output,
-    } satisfies TurnStats);
+    return {
+      entries: [
+        {
+          type: "custom" as const,
+          customType: AGENT_WORK_STATS_ENTRY_TYPE,
+          data: {
+            startedAt: start.toISOString(),
+            endedAt: end.toISOString(),
+            durationMs: Math.max(0, end.getTime() - start.getTime()),
+            inputTokens: tokenUsage.input,
+            outputTokens: tokenUsage.output,
+          } satisfies AgentWorkStats,
+        },
+      ],
+    };
   });
 
-  pi.registerEntryRenderer<TurnStats>(
-    ASSISTANT_TURN_END_ENTRY_TYPE,
+  pi.registerEntryRenderer<AgentWorkStats>(
+    AGENT_WORK_STATS_ENTRY_TYPE,
     (entry, _options, theme) => {
       if (!entry.data) return undefined;
 
@@ -100,7 +102,7 @@ export default function (pi: ExtensionAPI) {
           "muted",
           formatDuration(entry.data.durationMs)
         )}`,
-        theme.fg("dim", `started ${formatStartTime(entry.data.turnStart)}`),
+        theme.fg("dim", `started ${formatStartTime(entry.data.startedAt)}`),
         theme.fg(
           "dim",
           `↑${formatTokens(entry.data.inputTokens)} ↓${formatTokens(

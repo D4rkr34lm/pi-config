@@ -7,7 +7,7 @@ import { Text } from "@earendil-works/pi-tui";
 import { first } from "lodash-es";
 import {
   formatDuration,
-  formatStartTime,
+  formatTime,
   formatTokens,
 } from "../../utils/formatting";
 import { hasValue } from "../../utils/type-guards";
@@ -102,7 +102,7 @@ export default function (pi: ExtensionAPI) {
           "muted",
           formatDuration(entry.data.durationMs)
         )}`,
-        theme.fg("dim", `started ${formatStartTime(entry.data.startedAt)}`),
+        theme.fg("dim", `started ${formatTime(entry.data.startedAt)}`),
         theme.fg(
           "dim",
           `↑${formatTokens(entry.data.inputTokens)} ↓${formatTokens(

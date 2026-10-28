@@ -17,7 +17,7 @@ export function formatTokens(tokens: number): string {
   return `${Math.round(tokens / 1_000_000)}M`;
 }
 
-export function formatStartTime(timestamp: string): string {
+export function formatTime(timestamp: string): string {
   return new Date(timestamp).toLocaleTimeString(undefined, {
     hour: "2-digit",
     minute: "2-digit",

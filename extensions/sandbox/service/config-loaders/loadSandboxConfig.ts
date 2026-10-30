@@ -7,7 +7,7 @@ export type SandboxConfig = z.infer<typeof sandboxConfigSchema>;
 
 export function loadSandboxesConfig(): SandboxConfig {
   if (!fs.existsSync(SANDBOXES_CONFIG_FILE)) {
-    throw new Error(`TODO: implement`);
+    fs.writeFileSync(SANDBOXES_CONFIG_FILE, JSON.stringify({}), "utf-8");
   }
 
   const configContent = fs.readFileSync(SANDBOXES_CONFIG_FILE, "utf-8");

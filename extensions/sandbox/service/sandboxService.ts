@@ -11,6 +11,7 @@ import { buildSandboxedWriteTool } from "../tools/write";
 import { buildSandboxedEditTool } from "../tools/edit";
 import { buildSandboxedBashTool } from "../tools/bash";
 import { SandboxDefinition } from "./defineSandbox";
+import { ok, err, Result } from "neverthrow";
 
 export interface SandboxServiceContext {
   sandboxConfig?: SandboxConfig;
@@ -24,36 +25,35 @@ export async function useSandboxService(context: SandboxServiceContext = {}) {
 
   const activeSandboxes: { [cwd: string]: Sandbox } = {};
 
-  async function getSandboxFor(cwd: string): Promise<Sandbox> {
+  async function getSandboxFor(
+    cwd: string
+  ): Promise<
+    Result<Sandbox, "no-sandbox-configured" | "missing-sandbox-definition">
+  > {
     const activeSandbox = activeSandboxes[cwd];
 
     if (hasValue(activeSandbox)) {
-      return activeSandbox;
+      return ok(activeSandbox);
     }
 
     const sandboxNameForCwd = sandboxConfig[cwd];
 
     if (!sandboxNameForCwd) {
-      throw new Error(`No sandbox configured for ${cwd}`);
+      return err("no-sandbox-configured");
     }
 
     const sandboxDefinition = sandboxDefinitions[sandboxNameForCwd];
 
     if (!sandboxDefinition) {
-      throw new Error(`Sandbox definition not found for ${sandboxNameForCwd}`);
+      return err("missing-sandbox-definition");
     }
 
     const newSandbox = await startSandbox(sandboxDefinition, cwd);
     activeSandboxes[cwd] = newSandbox;
-    return newSandbox;
+    return ok(newSandbox);
   }
 
-  async function connectToSandboxFor(
-    cwd: string,
-    pi: ExtensionAPI
-  ): Promise<void> {
-    const sandbox = await getSandboxFor(cwd);
-
+  async function connectToSandbox(sandbox: Sandbox, pi: ExtensionAPI) {
     const readTool = buildSandboxedReadTool(sandbox);
     const writeTool = buildSandboxedWriteTool(sandbox);
     const editTool = buildSandboxedEditTool(sandbox);
@@ -67,6 +67,6 @@ export async function useSandboxService(context: SandboxServiceContext = {}) {
 
   return {
     getSandboxFor,
-    connectToSandboxFor,
+    connectToSandbox,
   };
 }

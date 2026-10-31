@@ -21,7 +21,7 @@ export function loadSandboxesConfig(): SandboxConfig {
   }
 }
 
-export async function writeSandboxesConfig(config: SandboxConfig) {
+export function writeSandboxesConfig(config: SandboxConfig) {
   const configContent = JSON.stringify(config, null, 2);
-  await fs.promises.writeFile(SANDBOXES_CONFIG_FILE, configContent, "utf-8");
+  fs.writeFileSync(SANDBOXES_CONFIG_FILE, configContent, "utf-8");
 }

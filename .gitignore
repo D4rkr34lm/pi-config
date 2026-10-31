@@ -5,6 +5,8 @@ bin
 # Stored data
 sessions
 data
+models-store.json
+crashes.json
 
 # Env
 auth.json

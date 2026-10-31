@@ -11,6 +11,8 @@ import { SandboxesConfig } from "./configs/sandboxesConfig";
 import { values } from "lodash-es";
 import { SandboxDefinition } from "./defineSandbox";
 
+export type SandboxService = Awaited<ReturnType<typeof useSandboxService>>;
+
 export async function useSandboxService() {
   const config = await SandboxesConfig.load();
 

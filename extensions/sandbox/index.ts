@@ -2,15 +2,17 @@ import {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { useSandboxService } from "./service/sandboxService";
+import { SandboxService, useSandboxService } from "./service/sandboxService";
 import { hasValue } from "../../utils/type-guards";
 import { NONE_SANDBOX_NAME } from "./service/configs/sandboxesConfig";
 
 const SANDBOX_STATUS_KEY = "sandbox-status";
 
-async function runSandboxStartup(pi: ExtensionAPI, ctx: ExtensionContext) {
-  const sandboxService = await useSandboxService();
-
+async function runSandboxStartup(
+  sandboxService: SandboxService,
+  pi: ExtensionAPI,
+  ctx: ExtensionContext
+) {
   const cwd = ctx.cwd;
 
   ctx.ui.setStatus(SANDBOX_STATUS_KEY, "Loading sandbox...");
@@ -33,13 +35,27 @@ async function runSandboxStartup(pi: ExtensionAPI, ctx: ExtensionContext) {
       [...availableDefinitions.map((def) => def.name), NONE_SANDBOX_NAME]
     );
 
-    if (hasValue(selectedDefinition)) {
+    console.log(
+      "Selected sandbox definition:",
+      selectedDefinition,
+      selectedDefinition === NONE_SANDBOX_NAME
+    );
+
+    if (selectedDefinition === NONE_SANDBOX_NAME) {
+      sandboxService.setSandboxDefinitionFor(cwd, null);
+      ctx.ui.setStatus(SANDBOX_STATUS_KEY, "Running without sandbox");
+    } else if (hasValue(selectedDefinition)) {
       sandboxService.setSandboxDefinitionFor(cwd, selectedDefinition);
       ctx.ui.setStatus(
         SANDBOX_STATUS_KEY,
         "Sandbox definition set - Loading sandbox..."
       );
-      runSandboxStartup(pi, ctx);
+      runSandboxStartup(sandboxService, pi, ctx);
+    } else {
+      ctx.ui.setStatus(
+        SANDBOX_STATUS_KEY,
+        "No sandbox definition selected - Running without sandbox"
+      );
     }
   } else {
     ctx.ui.setStatus(
@@ -53,6 +69,6 @@ export default async function (pi: ExtensionAPI) {
   const sandboxService = await useSandboxService();
 
   pi.on("session_start", async (_, ctx) => {
-    await runSandboxStartup(pi, ctx);
+    await runSandboxStartup(sandboxService, pi, ctx);
   });
 }

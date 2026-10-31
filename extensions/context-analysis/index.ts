@@ -6,8 +6,14 @@ import type {
 } from "@earendil-works/pi-ai";
 import { getSystemMessageText } from "@earendil-works/pi-ai";
 import {
+  estimateMessageTokens,
+  estimateTextAndImageContentTokens,
+  estimateTextTokens,
+} from "@earendil-works/pi-ai/utils/estimate";
+import {
   convertToLlm,
   type ExtensionAPI,
+  type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import { sum, sumBy } from "lodash-es";
@@ -25,7 +31,6 @@ const CONTEXT_CATEGORIES = [
 ] as const;
 
 const CONTEXT_WIDGET_KEY = "context-analysis";
-const ESTIMATED_IMAGE_CHARACTERS = 4_800;
 
 type ContextCategory = (typeof CONTEXT_CATEGORIES)[number]["category"];
 type ContextComposition = Record<ContextCategory, number>;
@@ -35,44 +40,51 @@ interface ContextContribution {
   tokens: number;
 }
 
-function estimateTokens(characters: number): number {
-  return Math.ceil(characters / 4);
-}
-
-function estimateContentTokens(
-  content: Extract<Message, { role: "user" | "toolResult" }>["content"]
-): number {
-  if (typeof content === "string") return estimateTokens(content.length);
-
-  return estimateTokens(
-    sumBy(content, (block) =>
-      block.type === "text" ? block.text.length : ESTIMATED_IMAGE_CHARACTERS
-    )
+function applyToolChanges(tools: Tool[], message: SystemMessage): Tool[] {
+  const removedNames = new Set(
+    message.toolsRemoved?.map(({ name }) => name) ?? []
   );
+  const addedTools = message.toolsAdded ?? [];
+  const addedNames = new Set(addedTools.map(({ name }) => name));
+
+  return [
+    ...tools.filter(
+      ({ name }) => !removedNames.has(name) && !addedNames.has(name)
+    ),
+    ...addedTools,
+  ];
 }
 
-function estimateToolTokens(tool: Tool): number {
-  return estimateTokens(
-    tool.name.length +
-      tool.description.length +
-      JSON.stringify(tool.parameters).length +
-      2
+function countCurrentSystem(
+  messages: Message[],
+  systemPrompt: string
+): ContextContribution[] {
+  // System transcript entries are deltas. Replay tools and use Pi's effective
+  // prompt so replaced sections and removed tools are not counted twice.
+  const activeTools = messages
+    .filter((message): message is SystemMessage => message.role === "system")
+    .reduce(applyToolChanges, [] as Tool[]);
+  const currentSystemMessage: SystemMessage = {
+    role: "system",
+    content: systemPrompt,
+    toolsAdded: activeTools,
+    timestamp: 0,
+  };
+  const systemPromptTokens = estimateTextTokens(
+    getSystemMessageText(currentSystemMessage)
   );
-}
 
-function countSystemMessage(message: SystemMessage): ContextContribution[] {
   return [
     {
       category: "systemPrompt",
-      tokens: estimateTokens(getSystemMessageText(message).length),
+      tokens: systemPromptTokens,
     },
     {
       category: "tools",
-      tokens:
-        sum(message.toolsAdded?.map(estimateToolTokens) ?? []) +
-        estimateTokens(
-          message.toolsRemoved?.map(({ name }) => name).join("\n").length ?? 0
-        ),
+      tokens: Math.max(
+        0,
+        estimateMessageTokens(currentSystemMessage) - systemPromptTokens
+      ),
     },
   ];
 }
@@ -82,14 +94,14 @@ function countVisibleAssistantBlock(
 ): ContextContribution[] {
   if (block.type === "thinking") return [];
   if (block.type === "text") {
-    return [{ category: "agent", tokens: estimateTokens(block.text.length) }];
+    return [{ category: "agent", tokens: estimateTextTokens(block.text) }];
   }
 
   return [
     {
       category: "toolCalls",
-      tokens: estimateTokens(
-        block.name.length + JSON.stringify(block.arguments).length + 1
+      tokens: estimateTextTokens(
+        block.name + (JSON.stringify(block.arguments) ?? "undefined")
       ),
     },
   ];
@@ -106,13 +118,9 @@ function countAssistantMessage(
   );
   if (thinkingBlocks.length === 0) return visibleContributions;
 
-  const estimatedVisibleTokens = sumBy(
-    visibleContributions,
-    ({ tokens }) => tokens
-  );
   const thinkingTokens =
     message.usage.reasoning ??
-    Math.max(0, message.usage.output - estimatedVisibleTokens);
+    sumBy(thinkingBlocks, (block) => estimateTextTokens(block.thinking));
 
   return [
     ...visibleContributions,
@@ -120,14 +128,15 @@ function countAssistantMessage(
   ];
 }
 
-function countMessage(message: Message): ContextContribution[] {
-  if (message.role === "system") return countSystemMessage(message);
+function countMessage(
+  message: Exclude<Message, SystemMessage>
+): ContextContribution[] {
   if (message.role === "assistant") return countAssistantMessage(message);
 
   return [
     {
       category: message.role === "user" ? "user" : "toolResults",
-      tokens: estimateContentTokens(message.content),
+      tokens: estimateTextAndImageContentTokens(message.content),
     },
   ];
 }
@@ -140,8 +149,19 @@ function mapComposition(
   ) as ContextComposition;
 }
 
-function countComposition(messages: Message[]): ContextComposition {
-  const contributions = messages.flatMap(countMessage);
+function countComposition(
+  messages: Message[],
+  systemPrompt: string
+): ContextComposition {
+  const contributions = [
+    ...countCurrentSystem(messages, systemPrompt),
+    ...messages
+      .filter(
+        (message): message is Exclude<Message, SystemMessage> =>
+          message.role !== "system"
+      )
+      .flatMap(countMessage),
+  ];
   return mapComposition((category) =>
     sumBy(contributions, (item) =>
       item.category === category ? item.tokens : 0
@@ -149,65 +169,51 @@ function countComposition(messages: Message[]): ContextComposition {
   );
 }
 
-function normalizeComposition(
+function formatComposition(
   composition: ContextComposition,
-  totalTokens: number | null | undefined
-): ContextComposition {
-  const adjustableTotal =
-    sum(Object.values(composition)) - composition.thinking;
-  if (
-    totalTokens === null ||
-    totalTokens === undefined ||
-    adjustableTotal === 0
-  ) {
-    return composition;
-  }
+  measuredTotal: number | null | undefined
+): string {
+  // Keep category estimates independent from aggregate provider usage. Scaling
+  // every category made an unchanged system prompt drift after each response.
+  const total = measuredTotal ?? sum(Object.values(composition));
+  const categories = CONTEXT_CATEGORIES.map(
+    ({ category, label }) => `${label} ${formatTokens(composition[category])}`
+  ).join(" · ");
 
-  const scale =
-    Math.max(0, totalTokens - composition.thinking) / adjustableTotal;
-  return mapComposition((category) =>
-    category === "thinking"
-      ? composition.thinking
-      : Math.round(composition[category] * scale)
+  return `ctx ${formatTokens(total)}: ${categories}`;
+}
+
+function updateWidget(ctx: ExtensionContext): void {
+  if (ctx.mode !== "tui") return;
+
+  const messages = convertToLlm(
+    ctx.sessionManager.buildSessionProjection().messages
+  );
+  const line = formatComposition(
+    countComposition(messages, ctx.getSystemPrompt()),
+    ctx.getContextUsage()?.tokens
+  );
+
+  ctx.ui.setWidget(
+    CONTEXT_WIDGET_KEY,
+    (_tui, theme) => ({
+      invalidate() {},
+      render(width) {
+        return [
+          truncateToWidth(theme.fg("dim", line), width, theme.fg("dim", "...")),
+        ];
+      },
+    }),
+    { placement: "belowEditor" }
   );
 }
 
-function formatComposition(composition: ContextComposition): string {
-  return CONTEXT_CATEGORIES.map(
-    ({ category, label }) => `${label} ${formatTokens(composition[category])}`
-  ).join(" · ");
-}
-
 export default function (pi: ExtensionAPI) {
-  pi.on("turn_start", (_event, ctx) => {
-    if (ctx.mode !== "tui") return;
-
-    const messages = convertToLlm(
-      ctx.sessionManager.buildSessionProjection().messages
-    );
-    const composition = normalizeComposition(
-      countComposition(messages),
-      ctx.getContextUsage()?.tokens
-    );
-    const line = `ctx: ${formatComposition(composition)}`;
-
-    ctx.ui.setWidget(
-      CONTEXT_WIDGET_KEY,
-      (_tui, theme) => ({
-        invalidate() {},
-        render(width) {
-          return [
-            truncateToWidth(
-              theme.fg("dim", line),
-              width,
-              theme.fg("dim", "...")
-            ),
-          ];
-        },
-      }),
-      { placement: "belowEditor" }
-    );
-  });
+  pi.on("session_start", (_event, ctx) => updateWidget(ctx));
+  pi.on("turn_start", (_event, ctx) => updateWidget(ctx));
+  pi.on("turn_end", (_event, ctx) => updateWidget(ctx));
+  pi.on("session_compact", (_event, ctx) => updateWidget(ctx));
+  pi.on("session_tree", (_event, ctx) => updateWidget(ctx));
 
   pi.on("session_shutdown", (_event, ctx) => {
     if (ctx.mode === "tui") {

@@ -251,7 +251,7 @@ describe("start Sandbox", { concurrent: false }, () => {
   );
 
   it(
-    "allows executing bash commands in the sandbox",
+    "streams command output and reports successful and failed exit codes",
     async () => {
       using _workspaceSetup = setupTestWorkspace([
         {
@@ -276,6 +276,16 @@ describe("start Sandbox", { concurrent: false }, () => {
       expect(stdout.trim()).toEqual("Hello, World!");
       expect(stderr.trim()).toEqual("");
       expect(exitCode).toBe(0);
+
+      const failingResult = await sandbox.api.shell.executeCommand.mutate({
+        command: "bash -c 'yes x | head -c 1048576 >&2; exit 23'",
+        authToken: sandbox.authToken,
+      });
+      const failedCommand = await collectShellStream(failingResult);
+
+      expect(failedCommand.stdout).toEqual("");
+      expect(failedCommand.stderr).toHaveLength(1048576);
+      expect(failedCommand.exitCode).toBe(23);
     },
     TEST_TIMEOUT
   );

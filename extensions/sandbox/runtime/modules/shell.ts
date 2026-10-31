@@ -1,10 +1,51 @@
 import { spawn } from "child_process";
+import { once } from "events";
+import { PassThrough, Readable } from "stream";
+import { finished } from "stream/promises";
 import { protectedProcedure, router } from "../trpc";
 import z from "zod";
 import { omit, toString } from "lodash-es";
 import { SANDBOX_USER_ID } from "../constants";
 
 const commandEnvironment = omit(process.env, "SANDBOX_AUTH_TOKEN");
+
+type CommandOutput =
+  | { type: "stdout"; data: string }
+  | { type: "stderr"; data: string };
+
+async function* tagCommandOutput(
+  stream: Readable,
+  type: CommandOutput["type"]
+): AsyncGenerator<CommandOutput> {
+  for await (const data of stream) {
+    yield { type, data: toString(data) };
+  }
+}
+
+function mergeCommandOutput(
+  stdout: Readable,
+  stderr: Readable
+): AsyncIterable<CommandOutput> {
+  const output = new PassThrough({ objectMode: true });
+  const taggedStreams = [
+    Readable.from(tagCommandOutput(stdout, "stdout")),
+    Readable.from(tagCommandOutput(stderr, "stderr")),
+  ];
+
+  const streamsFinished = Promise.all(
+    taggedStreams.map((stream) => {
+      stream.pipe(output, { end: false });
+      return finished(stream);
+    })
+  );
+
+  void streamsFinished.then(
+    () => output.end(),
+    (error) => output.destroy(error)
+  );
+
+  return output;
+}
 
 const executeCommand = protectedProcedure
   .input(
@@ -30,30 +71,43 @@ const executeCommand = protectedProcedure
       uid: SANDBOX_USER_ID,
     });
 
+    const processCompletion = once(commandProcess, "close").then(
+      ([exitCode]) => ({ exitCode: exitCode as number | null }),
+      (error: unknown) => ({ error })
+    );
     const onAbort = () => {
       console.log("[INFO] Aborting command execution due to signal abort");
       commandProcess.kill();
     };
 
-    signal?.addEventListener("abort", onAbort, { once: true });
-
-    for await (const data of commandProcess.stdout) {
-      yield { type: "stdout" as const, data: toString(data) };
+    if (signal?.aborted) {
+      onAbort();
+    } else {
+      signal?.addEventListener("abort", onAbort, { once: true });
     }
 
-    for await (const data of commandProcess.stderr) {
-      yield { type: "stderr" as const, data: toString(data) };
+    try {
+      for await (const output of mergeCommandOutput(
+        commandProcess.stdout,
+        commandProcess.stderr
+      )) {
+        yield output;
+      }
+
+      const completion = await processCompletion;
+      if ("error" in completion) {
+        throw completion.error;
+      }
+
+      console.log(
+        "[INFO] Command execution completed with exit code:",
+        completion.exitCode
+      );
+
+      yield { type: "exit" as const, code: completion.exitCode };
+    } finally {
+      signal?.removeEventListener("abort", onAbort);
     }
-
-    const exitCode = await new Promise<number | null>((resolve) => {
-      commandProcess.on("exit", (code) => {
-        resolve(code);
-      });
-    });
-
-    console.log("[INFO] Command execution completed with exit code:", exitCode);
-
-    yield { type: "exit" as const, code: exitCode };
   });
 
 export const shellRouter = router({

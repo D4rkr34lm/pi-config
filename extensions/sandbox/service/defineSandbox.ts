@@ -1,14 +1,11 @@
-export const DEFAULT_NODE_VERSION = "26.12.1";
-export const DEFAULT_NPM_VERSION = "12";
-export const DEFAULT_TSX_VERSION = "4.20.6";
-
-export type BaseImage = "debian:bookworm";
-
 export interface Dependencies {
-  node: string;
-  npm: string;
-  tsx: string;
+  node?: string | true;
+  npm?: string | true;
+  tsx?: string | true;
+  bun?: string | true;
 }
+
+export type DependencyName = keyof Dependencies;
 
 export interface FileSystemSettings {
   privatePaths: string[];
@@ -35,12 +32,7 @@ export function defineSandbox(definition: {
       privatePaths: definition.privatePaths ?? [],
       forbiddenPaths: definition.forbiddenPaths ?? [],
     },
-    dependencies: {
-      node: DEFAULT_NODE_VERSION,
-      npm: DEFAULT_NPM_VERSION,
-      tsx: DEFAULT_TSX_VERSION,
-      ...definition.dependencies,
-    },
+    dependencies: definition.dependencies ?? {},
     runAfterStart: definition.runAfterStart ?? [],
   };
 }

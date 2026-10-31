@@ -12,3 +12,6 @@ export const PI_CONFIG_DIR = path.join(os.homedir(), ".pi", "agent");
 
 export const SANDBOXES_CONFIG_FILE = path.join(PI_CONFIG_DIR, "sandboxes.json");
 export const SANDBOXES_DIR = path.join(PI_CONFIG_DIR, "sandboxes");
+
+export const USER_NVM_DIR = "/home/sandbox/.nvm";
+export const ROOT_NVM_DIR = "/root/.nvm";

@@ -11,11 +11,11 @@ import { SANDBOX_WORKING_DIR } from "./constants";
 import path from "path";
 import { fileURLToPath } from "url";
 import { range } from "lodash-es";
-import { randomUUID } from "crypto";
+import { hash, randomUUID } from "crypto";
 import type { SandboxStartupProgressHandler } from "./sandboxStartupProgress";
 
 function getSandboxImageTag(definition: SandboxDefinition) {
-  return `pi-sandbox-${definition.name}:latest`;
+  return `pi-sandbox-${definition.name}-${hash("sha1", JSON.stringify(definition))}:latest`;
 }
 
 function getSandboxBuildContext() {
@@ -56,11 +56,15 @@ async function runSandboxSetupCommand(
     command,
   });
 
+  let stderr = "";
+
   for await (const event of output) {
     if (event.type === "exit" && event.code !== 0) {
       throw new Error(
-        `Sandbox setup command failed with exit code ${event.code}: ${command}`
+        `Sandbox setup command failed with exit code ${event.code}: ${command}\n${stderr}`
       );
+    } else if (event.type === "stderr") {
+      stderr += event.data;
     }
   }
 }

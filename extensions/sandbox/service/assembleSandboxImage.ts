@@ -1,41 +1,30 @@
+import { SandboxDefinition } from "./defineSandbox";
 import {
-  DEFAULT_NODE_VERSION,
-  DEFAULT_NPM_VERSION,
-  DEFAULT_TSX_VERSION,
-  SandboxDefinition,
-} from "./defineSandbox";
-import {
+  ROOT_NVM_DIR,
   SANDBOX_GROUP_ID,
   SANDBOX_RUNTIME_PATH,
   SANDBOX_USER_ID,
+  USER_NVM_DIR,
 } from "./constants";
+import {
+  dependencyInstallers,
+  installNode,
+  installNpm,
+  installTsx,
+} from "./dependencies";
+import { hasValue } from "../../../utils/type-guards";
+import { toPairs } from "../../../utils/strict-utils";
 
-const USER_NVM_DIR = "/home/sandbox/.nvm";
-
-const installNode = (nodeVersion: string, nvmDir: string) => `
-RUN . "${nvmDir}/nvm.sh" && nvm install ${nodeVersion} && nvm use ${nodeVersion} && nvm alias default ${nodeVersion}
-ENV PATH="${nvmDir}/versions/node/v${nodeVersion}/bin:$PATH"
-`;
-
-const installNpm = (npmVersion: string) => `
-RUN npm install -g npm@${npmVersion}
-`;
-
-const installTsx = (tsxVersion: string) => `
-RUN npm install -g tsx@${tsxVersion}
-`;
-
-const ROOT_NVM_DIR = "/root/.nvm";
 const setupRuntime = () => {
   return `
   USER root
   ENV NVM_DIR=${ROOT_NVM_DIR}
   RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.6/install.sh | bash
 
-  ${installNode(DEFAULT_NODE_VERSION, ROOT_NVM_DIR)}
+  ${installNode(ROOT_NVM_DIR)}
 
-  ${installNpm(DEFAULT_NPM_VERSION)}
-  ${installTsx(DEFAULT_TSX_VERSION)}
+  ${installNpm()}
+  ${installTsx()}
 
   RUN mkdir ${SANDBOX_RUNTIME_PATH} && chmod 700 ${SANDBOX_RUNTIME_PATH}
 
@@ -51,16 +40,28 @@ const createSandboxUser = () => {
 `;
 };
 
+const userSpaceDependencies = (sandboxDefinition: SandboxDefinition) => {
+  const dependencies = sandboxDefinition.dependencies;
+
+  const definedDependencies = toPairs(dependencies).filter(([_, version]) =>
+    hasValue(version)
+  );
+
+  const installationParts = definedDependencies.map(([name, version]) => {
+    const computedVersion = version === true ? undefined : version;
+    const installer = dependencyInstallers[name];
+    return installer(computedVersion);
+  });
+  return installationParts.join("\n");
+};
+
 const setupUserSpace = (sandboxDefinition: SandboxDefinition) => {
   return `
   USER sandbox
   ENV NVM_DIR=${USER_NVM_DIR}
   RUN curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.6/install.sh | bash
 
-  ${installNode(sandboxDefinition.dependencies.node, USER_NVM_DIR)}
-
-  ${installNpm(sandboxDefinition.dependencies.npm)}
-  ${installTsx(sandboxDefinition.dependencies.tsx)}
+  ${userSpaceDependencies(sandboxDefinition)}
   `;
 };
 

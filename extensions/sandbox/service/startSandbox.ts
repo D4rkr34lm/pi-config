@@ -98,7 +98,7 @@ export function assemblePrivateVolumeMounts(
   sandboxDefinition: SandboxDefinition
 ): Volume[] {
   return sandboxDefinition.fileSystemSettings.privatePaths.map((path) => ({
-    target: path,
+    target: `${SANDBOX_WORKING_DIR}/${path}`,
   }));
 }
 

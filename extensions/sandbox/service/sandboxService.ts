@@ -10,6 +10,7 @@ import { ok, err, Result } from "neverthrow";
 import { SandboxesConfig } from "./configs/sandboxesConfig";
 import { keys, values } from "lodash-es";
 import { SandboxDefinition } from "./defineSandbox";
+import type { SandboxStartupProgressHandler } from "./sandboxStartupProgress";
 
 export type SandboxService = Awaited<ReturnType<typeof useSandboxService>>;
 
@@ -40,7 +41,8 @@ export async function useSandboxService() {
   }
 
   async function getSandboxFor(
-    cwd: string
+    cwd: string,
+    onProgress?: SandboxStartupProgressHandler
   ): Promise<
     Result<
       Sandbox | null,
@@ -64,7 +66,7 @@ export async function useSandboxService() {
     if (hasNoValue(sandboxDefinition)) {
       return ok(null);
     } else {
-      const newSandbox = await startSandbox(sandboxDefinition, cwd);
+      const newSandbox = await startSandbox(sandboxDefinition, cwd, onProgress);
       activeSandboxes[cwd] = newSandbox;
       return ok(newSandbox);
     }

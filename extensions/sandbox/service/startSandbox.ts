@@ -12,6 +12,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { range } from "lodash-es";
 import { randomUUID } from "crypto";
+import type { SandboxStartupProgressHandler } from "./sandboxStartupProgress";
 
 function getSandboxImageTag(definition: SandboxDefinition) {
   return `pi-sandbox-${definition.name}:latest`;
@@ -41,6 +42,25 @@ async function waitForSandboxApi(
         );
       }
       await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+}
+
+async function runSandboxSetupCommand(
+  sandboxApi: TRPCClient<AppRouter>,
+  authToken: string,
+  command: string
+): Promise<void> {
+  const output = await sandboxApi.shell.executeCommand.mutate({
+    authToken,
+    command,
+  });
+
+  for await (const event of output) {
+    if (event.type === "exit" && event.code !== 0) {
+      throw new Error(
+        `Sandbox setup command failed with exit code ${event.code}: ${command}`
+      );
     }
   }
 }
@@ -88,15 +108,24 @@ export interface Sandbox {
 
 export async function startSandbox(
   definition: SandboxDefinition,
-  workspacePath: string
+  workspacePath: string,
+  onProgress?: SandboxStartupProgressHandler
 ): Promise<Sandbox> {
   const dockerApi = useSimpleDockerApi();
 
   const imageTag = getSandboxImageTag(definition);
 
+  onProgress?.({
+    phase: "checking-image",
+    definitionName: definition.name,
+  });
   const sandboxImageExists = await doesSandboxImageExist(imageTag);
 
   if (!sandboxImageExists) {
+    onProgress?.({
+      phase: "building-image",
+      definitionName: definition.name,
+    });
     await buildSandboxImage(definition);
   }
 
@@ -111,6 +140,10 @@ export async function startSandbox(
   const sandboxPort = getSandboxPort();
   const authToken = randomUUID();
 
+  onProgress?.({
+    phase: "starting-container",
+    definitionName: definition.name,
+  });
   const containerId = await dockerApi.runContainer({
     containerName: `pi-sandbox-${definition.name}`,
     image: imageTag,
@@ -138,8 +171,16 @@ export async function startSandbox(
   };
 
   try {
+    onProgress?.({
+      phase: "waiting-for-api",
+      definitionName: definition.name,
+    });
     await waitForSandboxApi(sandboxApi);
 
+    onProgress?.({
+      phase: "applying-policy",
+      definitionName: definition.name,
+    });
     await sandboxApi.admin.setup.mutate({
       authToken,
       forbiddenGlobs: [
@@ -148,12 +189,15 @@ export async function startSandbox(
       ],
     });
 
-    definition.runAfterStart.forEach(async (command) => {
-      await sandboxApi.shell.executeCommand.mutate({
-        authToken,
-        command,
+    for (const command of definition.runAfterStart) {
+      onProgress?.({
+        phase: "running-setup",
+        definitionName: definition.name,
+        commandIndex: definition.runAfterStart.indexOf(command) + 1,
+        commandCount: definition.runAfterStart.length,
       });
-    });
+      await runSandboxSetupCommand(sandboxApi, authToken, command);
+    }
 
     return {
       workspacePath,

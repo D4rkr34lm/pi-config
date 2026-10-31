@@ -5,8 +5,7 @@ import {
 import { SandboxService, useSandboxService } from "./service/sandboxService";
 import { hasValue } from "../../utils/type-guards";
 import { NONE_SANDBOX_NAME } from "./service/configs/sandboxesConfig";
-
-const SANDBOX_STATUS_KEY = "sandbox-status";
+import { createSandboxStartupUi } from "./ui/startupStatus";
 
 async function selectSandboxDefinitionForWorkspace(
   sandboxService: SandboxService,
@@ -14,6 +13,12 @@ async function selectSandboxDefinitionForWorkspace(
   ctx: ExtensionContext
 ) {
   const cwd = ctx.cwd;
+  const sandboxUi = createSandboxStartupUi(ctx);
+
+  if (!ctx.hasUI) {
+    sandboxUi.unconfigured();
+    return;
+  }
 
   const availableDefinitions = sandboxService.getAvailableSandboxDefinitions();
   const selectedDefinition = await ctx.ui.select(
@@ -23,19 +28,12 @@ async function selectSandboxDefinitionForWorkspace(
 
   if (selectedDefinition === NONE_SANDBOX_NAME) {
     sandboxService.setSandboxDefinitionFor(cwd, null);
-    ctx.ui.setStatus(SANDBOX_STATUS_KEY, "Running without sandbox");
+    sandboxUi.disabled();
   } else if (hasValue(selectedDefinition)) {
     sandboxService.setSandboxDefinitionFor(cwd, selectedDefinition);
-    ctx.ui.setStatus(
-      SANDBOX_STATUS_KEY,
-      "Sandbox definition set - Loading sandbox..."
-    );
-    runSandboxStartup(sandboxService, pi, ctx);
+    await runSandboxStartup(sandboxService, pi, ctx);
   } else {
-    ctx.ui.setStatus(
-      SANDBOX_STATUS_KEY,
-      "No sandbox definition selected - Running without sandbox"
-    );
+    sandboxUi.unconfigured();
   }
 }
 
@@ -45,26 +43,36 @@ async function runSandboxStartup(
   ctx: ExtensionContext
 ) {
   const cwd = ctx.cwd;
+  const sandboxUi = createSandboxStartupUi(ctx);
+  sandboxUi.start();
 
-  ctx.ui.setStatus(SANDBOX_STATUS_KEY, "Loading sandbox...");
-
-  const sandboxResult = await sandboxService.getSandboxFor(cwd);
-
-  if (sandboxResult.isOk()) {
-    const sandbox = sandboxResult.value;
-    if (hasValue(sandbox)) {
-      await sandboxService.connectToSandbox(sandbox, pi);
-      ctx.ui.setStatus(SANDBOX_STATUS_KEY, "Connected to sandbox");
-    } else {
-      ctx.ui.setStatus(SANDBOX_STATUS_KEY, "Running without sandbox");
-    }
-  } else if (sandboxResult.error === "no-sandbox-configured") {
-    selectSandboxDefinitionForWorkspace(sandboxService, pi, ctx);
-  } else {
-    ctx.ui.setStatus(
-      SANDBOX_STATUS_KEY,
-      `Error loading sandbox - ${sandboxResult.error} - ${cwd}`
+  try {
+    const sandboxResult = await sandboxService.getSandboxFor(
+      cwd,
+      sandboxUi.update
     );
+
+    if (sandboxResult.isOk()) {
+      const sandbox = sandboxResult.value;
+      if (hasValue(sandbox)) {
+        sandboxUi.update({
+          phase: "activating-tools",
+          definitionName: sandbox.definition.name,
+        });
+        await sandboxService.connectToSandbox(sandbox, pi);
+        sandboxUi.ready(sandbox.definition.name);
+      } else {
+        sandboxUi.disabled();
+      }
+    } else if (sandboxResult.error === "no-sandbox-configured") {
+      sandboxUi.unconfigured();
+      await selectSandboxDefinitionForWorkspace(sandboxService, pi, ctx);
+    } else {
+      sandboxUi.failed(sandboxResult.error);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    sandboxUi.failed(message);
   }
 }
 
@@ -82,7 +90,7 @@ export default async function (pi: ExtensionAPI) {
   });
 
   pi.registerCommand("select-sandbox", {
-    handler: async (event, ctx) => {
+    handler: async (_event, ctx) => {
       await selectSandboxDefinitionForWorkspace(sandboxService, pi, ctx);
     },
     description: "Select a sandbox definition for the current workspace",

@@ -1,4 +1,8 @@
 import {
+  createBashTool,
+  createEditTool,
+  createReadTool,
+  createWriteTool,
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
@@ -6,6 +10,13 @@ import { SandboxService, useSandboxService } from "./service/sandboxService";
 import { hasValue } from "../../utils/type-guards";
 import { NONE_SANDBOX_NAME } from "./service/configs/sandboxesConfig";
 import { createSandboxStartupUi } from "./ui/startupStatus";
+
+function registerDefaultTools(pi: ExtensionAPI, cwd: string) {
+  pi.registerTool(createBashTool(cwd));
+  pi.registerTool(createReadTool(cwd));
+  pi.registerTool(createWriteTool(cwd));
+  pi.registerTool(createEditTool(cwd));
+}
 
 async function selectSandboxDefinitionForWorkspace(
   sandboxService: SandboxService,
@@ -63,6 +74,7 @@ async function runSandboxStartup(
         sandboxUi.ready(sandbox.definition.name);
       } else {
         sandboxUi.disabled();
+        registerDefaultTools(pi, cwd);
       }
     } else if (sandboxResult.error === "no-sandbox-configured") {
       sandboxUi.unconfigured();

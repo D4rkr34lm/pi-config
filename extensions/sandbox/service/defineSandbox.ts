@@ -1,6 +1,6 @@
-const DEFAULT_NODE_VERSION = "26.12.1";
-const DEFAULT_NPM_VERSION = "12";
-const DEFAULT_TSX_VERSION = "4.20.6";
+export const DEFAULT_NODE_VERSION = "26.12.1";
+export const DEFAULT_NPM_VERSION = "12";
+export const DEFAULT_TSX_VERSION = "4.20.6";
 
 export type BaseImage = "debian:bookworm";
 

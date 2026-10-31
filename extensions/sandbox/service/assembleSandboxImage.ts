@@ -1,5 +1,9 @@
 import { SandboxDefinition } from "./defineSandbox";
-import { SANDBOX_RUNTIME_PATH, SANDBOX_USER_ID } from "./constants";
+import {
+  SANDBOX_GROUP_ID,
+  SANDBOX_RUNTIME_PATH,
+  SANDBOX_USER_ID,
+} from "./constants";
 
 const SANDBOX_BASE_IMAGE = "debian:bookworm";
 const ESSENTIAL_DEPENDENCIES = `libatomic1 ca-certificates curl git bash ripgrep`;
@@ -37,7 +41,8 @@ export function assembleSandboxDockerFile(
   RUN mkdir /workspace && chmod 777 /workspace
   RUN mkdir ${SANDBOX_RUNTIME_PATH} && chmod 700 ${SANDBOX_RUNTIME_PATH}
 
-  RUN useradd --shell /bin/bash --uid ${SANDBOX_USER_ID} sandbox
+  RUN groupadd --gid ${SANDBOX_GROUP_ID} sandbox \
+    && useradd --shell /bin/bash --uid ${SANDBOX_USER_ID} --gid ${SANDBOX_GROUP_ID} sandbox
 
   COPY runtime ${SANDBOX_RUNTIME_PATH}
   RUN npm install --prefix ${SANDBOX_RUNTIME_PATH}

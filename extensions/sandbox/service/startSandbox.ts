@@ -145,7 +145,7 @@ export async function startSandbox(
     definitionName: definition.name,
   });
   const containerId = await dockerApi.runContainer({
-    containerName: `pi-sandbox-${definition.name}`,
+    containerName: `pi-sandbox-${definition.name}-${randomUUID()}`,
     image: imageTag,
     env: { SANDBOX_AUTH_TOKEN: authToken, PORT: sandboxPort.toString() },
     volumes,

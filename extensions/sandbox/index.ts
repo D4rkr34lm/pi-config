@@ -108,7 +108,7 @@ export default async function (pi: ExtensionAPI) {
     }
   });
 
-  pi.registerCommand("select-sandbox", {
+  pi.registerCommand("use-sandbox", {
     handler: async (_event, ctx) => {
       await selectSandboxDefinitionForWorkspace(sandboxService, pi, ctx);
     },

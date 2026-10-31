@@ -77,12 +77,42 @@ const setupWorkspace = () => {
 const SANDBOX_BASE_IMAGE = "debian:bookworm";
 
 const ESSENTIAL_DEPENDENCIES = [
+  // Runtime/bootstrap
   "libatomic1",
   "ca-certificates",
   "curl",
-  "git",
   "bash",
+
+  // Source control and searching
+  "git",
+  "openssh-client",
   "ripgrep",
+
+  // Python
+  "python3",
+  "python3-pip",
+  "python3-venv",
+  "python3-dev",
+  "python-is-python3",
+
+  // Native Node/Python package compilation
+  "build-essential",
+  "pkg-config",
+
+  // Data and file inspection
+  "jq",
+  "file",
+
+  // Patching and archives
+  "patch",
+  "diffutils",
+  "zip",
+  "unzip",
+  "xz-utils",
+
+  // Process debugging
+  "procps",
+  "lsof",
 ];
 export function assembleSandboxDockerFile(
   definition: SandboxDefinition

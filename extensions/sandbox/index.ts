@@ -35,12 +35,6 @@ async function runSandboxStartup(
       [...availableDefinitions.map((def) => def.name), NONE_SANDBOX_NAME]
     );
 
-    console.log(
-      "Selected sandbox definition:",
-      selectedDefinition,
-      selectedDefinition === NONE_SANDBOX_NAME
-    );
-
     if (selectedDefinition === NONE_SANDBOX_NAME) {
       sandboxService.setSandboxDefinitionFor(cwd, null);
       ctx.ui.setStatus(SANDBOX_STATUS_KEY, "Running without sandbox");
@@ -70,5 +64,11 @@ export default async function (pi: ExtensionAPI) {
 
   pi.on("session_start", async (_, ctx) => {
     await runSandboxStartup(sandboxService, pi, ctx);
+  });
+
+  pi.on("session_shutdown", async (event) => {
+    if (event.reason === "quit" || event.reason === "reload") {
+      await sandboxService.stopAllSandboxes();
+    }
   });
 }

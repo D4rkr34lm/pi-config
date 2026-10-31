@@ -8,7 +8,7 @@ import { buildSandboxedBashTool } from "../tools/bash";
 
 import { ok, err, Result } from "neverthrow";
 import { SandboxesConfig } from "./configs/sandboxesConfig";
-import { values } from "lodash-es";
+import { keys, values } from "lodash-es";
 import { SandboxDefinition } from "./defineSandbox";
 
 export type SandboxService = Awaited<ReturnType<typeof useSandboxService>>;
@@ -82,10 +82,27 @@ export async function useSandboxService() {
     pi.registerTool(bashTool);
   }
 
+  async function stopSandboxFor(cwd: string) {
+    const activeSandbox = activeSandboxes[cwd];
+
+    if (hasValue(activeSandbox)) {
+      await activeSandbox.stop();
+      delete activeSandboxes[cwd];
+    }
+  }
+
+  async function stopAllSandboxes() {
+    for (const cwd of keys(activeSandboxes)) {
+      await stopSandboxFor(cwd);
+    }
+  }
+
   return {
     getSandboxFor,
     connectToSandbox,
     getAvailableSandboxDefinitions,
     setSandboxDefinitionFor,
+    stopSandboxFor,
+    stopAllSandboxes,
   };
 }

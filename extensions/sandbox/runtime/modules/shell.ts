@@ -31,6 +31,7 @@ const executeCommand = protectedProcedure
     });
 
     const onAbort = () => {
+      console.log("[INFO] Aborting command execution due to signal abort");
       commandProcess.kill();
     };
 
@@ -49,6 +50,8 @@ const executeCommand = protectedProcedure
         resolve(code);
       });
     });
+
+    console.log("[INFO] Command execution completed with exit code:", exitCode);
 
     yield { type: "exit" as const, code: exitCode };
   });

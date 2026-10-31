@@ -18,6 +18,11 @@ const readFile = protectedProcedure
   )
   .query(async ({ input }) => {
     if (isPathForbidden(input.path)) {
+      console.log(
+        "[ERROR] Attempted to read a file that is forbidden by the sandbox configuration:",
+        input.path
+      );
+
       return {
         type: "error",
         message: "ACCESS_DENIED",
@@ -28,12 +33,22 @@ const readFile = protectedProcedure
       const stat = await fs.stat(input.path);
 
       if (!stat.isFile()) {
+        console.log(
+          "[ERROR] Attempted to read a path that is not a file:",
+          input.path
+        );
+
         return {
           type: "error",
           message: "NOT_A_FILE",
         };
       }
     } catch {
+      console.log(
+        "[ERROR] Attempted to read a file that does not exist:",
+        input.path
+      );
+
       return {
         type: "error",
         message: "FILE_NOT_FOUND",
@@ -42,13 +57,19 @@ const readFile = protectedProcedure
 
     try {
       const content = await fs.readFile(input.path, input.encoding ?? "utf8");
+      console.log("[INFO] Successfully read file:", input.path);
       return {
         type: "success",
         content,
       };
-    } catch {
+    } catch (e) {
+      console.log(
+        "[ERROR] Failed to read file due to an unexpected error:",
+        input.path,
+        e
+      );
       return {
-        type: "error",
+        type: "error" as const,
         message: "FAILED_TO_READ_FILE",
       };
     }
@@ -64,6 +85,11 @@ const writeFile = protectedProcedure
   )
   .mutation(async ({ input }) => {
     if (isPathForbidden(input.path)) {
+      console.log(
+        "[ERROR] Attempted to write to a file that is forbidden by the sandbox configuration:",
+        input.path
+      );
+
       return {
         type: "error",
         message: "ACCESS_DENIED",
@@ -72,12 +98,20 @@ const writeFile = protectedProcedure
 
     try {
       await fs.writeFile(input.path, input.content, "utf-8");
-    } catch {
+    } catch (e) {
+      console.log(
+        "[ERROR] Failed to write to file due to an unexpected error:",
+        input.path,
+        e
+      );
+
       return {
-        type: "error",
+        type: "error" as const,
         message: "FAILED_TO_WRITE_FILE",
       };
     }
+
+    console.log("[INFO] Successfully wrote to file:", input.path);
 
     return {
       type: "success",
@@ -94,6 +128,11 @@ const mkdir = protectedProcedure
   )
   .mutation(async ({ input }) => {
     if (isPathForbidden(input.path)) {
+      console.log(
+        "[ERROR] Attempted to create a directory that is forbidden by the sandbox configuration:",
+        input.path
+      );
+
       return {
         type: "error",
         message: "ACCESS_DENIED",
@@ -102,13 +141,20 @@ const mkdir = protectedProcedure
 
     try {
       await fs.mkdir(input.path, { recursive: true });
-    } catch {
+    } catch (e) {
+      console.log(
+        "[ERROR] Failed to create directory due to an unexpected error:",
+        input.path,
+        e
+      );
+
       return {
-        type: "error",
+        type: "error" as const,
         message: "FAILED_TO_CREATE_DIRECTORY",
       };
     }
 
+    console.log("[INFO] Successfully created directory:", input.path);
     return {
       type: "success",
     };

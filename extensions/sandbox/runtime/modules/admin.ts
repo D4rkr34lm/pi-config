@@ -22,7 +22,14 @@ const setup = protectedProcedure
 
     await Promise.allSettled(denyPromises);
 
+    console.log(
+      "[INFO] Setting up sandbox storage with forbidden globs:",
+      forbiddenGlobs
+    );
+
     setupStorage({ forbiddenGlobs });
+
+    console.log("[INFO] Sandbox storage setup complete.");
 
     return {
       success: true,

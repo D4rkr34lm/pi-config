@@ -1,34 +1,49 @@
 import { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { hasValue } from "../../../utils/type-guards";
-import {
-  loadSandboxesConfig,
-  SandboxConfig,
-} from "./config-loaders/loadSandboxConfig";
-import { loadSandboxDefinitions } from "./config-loaders/loadSandboxDefinitions";
+import { hasNoValue, hasValue } from "../../../utils/type-guards";
 import { Sandbox, startSandbox } from "./startSandbox";
 import { buildSandboxedReadTool } from "../tools/read";
 import { buildSandboxedWriteTool } from "../tools/write";
 import { buildSandboxedEditTool } from "../tools/edit";
 import { buildSandboxedBashTool } from "../tools/bash";
-import { SandboxDefinition } from "./defineSandbox";
+
 import { ok, err, Result } from "neverthrow";
+import { SandboxesConfig } from "./configs/sandboxesConfig";
+import { values } from "lodash-es";
+import { SandboxDefinition } from "./defineSandbox";
 
-export interface SandboxServiceContext {
-  sandboxConfig?: SandboxConfig;
-  sandboxDefinitions?: Record<string, SandboxDefinition>;
-}
-
-export async function useSandboxService(context: SandboxServiceContext = {}) {
-  const sandboxConfig = context.sandboxConfig ?? loadSandboxesConfig();
-  const sandboxDefinitions =
-    context.sandboxDefinitions ?? (await loadSandboxDefinitions());
+export async function useSandboxService() {
+  const config = await SandboxesConfig.load();
 
   const activeSandboxes: { [cwd: string]: Sandbox } = {};
+
+  function getAvailableSandboxDefinitions(): SandboxDefinition[] {
+    return values(config.definitions);
+  }
+
+  function setSandboxDefinitionFor(cwd: string, definitionName: string | null) {
+    if (hasNoValue(definitionName)) {
+      config.setSandboxDefinitionFor(cwd, null);
+      return;
+    } else {
+      const definition = config.definitions[definitionName];
+
+      if (hasValue(definition)) {
+        config.setSandboxDefinitionFor(cwd, definition);
+      } else {
+        throw new Error(
+          `Sandbox definition with name "${definitionName}" does not exist`
+        );
+      }
+    }
+  }
 
   async function getSandboxFor(
     cwd: string
   ): Promise<
-    Result<Sandbox, "no-sandbox-configured" | "missing-sandbox-definition">
+    Result<
+      Sandbox | null,
+      "no-sandbox-configured" | "missing-sandbox-definition"
+    >
   > {
     const activeSandbox = activeSandboxes[cwd];
 
@@ -36,21 +51,21 @@ export async function useSandboxService(context: SandboxServiceContext = {}) {
       return ok(activeSandbox);
     }
 
-    const sandboxNameForCwd = sandboxConfig[cwd];
+    const sandboxDefinitionResult = config.getSandboxDefinitionFor(cwd);
 
-    if (!sandboxNameForCwd) {
-      return err("no-sandbox-configured");
+    if (sandboxDefinitionResult.isErr()) {
+      return err(sandboxDefinitionResult.error);
     }
 
-    const sandboxDefinition = sandboxDefinitions[sandboxNameForCwd];
+    const sandboxDefinition = sandboxDefinitionResult.value;
 
-    if (!sandboxDefinition) {
-      return err("missing-sandbox-definition");
+    if (hasNoValue(sandboxDefinition)) {
+      return ok(null);
+    } else {
+      const newSandbox = await startSandbox(sandboxDefinition, cwd);
+      activeSandboxes[cwd] = newSandbox;
+      return ok(newSandbox);
     }
-
-    const newSandbox = await startSandbox(sandboxDefinition, cwd);
-    activeSandboxes[cwd] = newSandbox;
-    return ok(newSandbox);
   }
 
   async function connectToSandbox(sandbox: Sandbox, pi: ExtensionAPI) {
@@ -68,5 +83,7 @@ export async function useSandboxService(context: SandboxServiceContext = {}) {
   return {
     getSandboxFor,
     connectToSandbox,
+    getAvailableSandboxDefinitions,
+    setSandboxDefinitionFor,
   };
 }

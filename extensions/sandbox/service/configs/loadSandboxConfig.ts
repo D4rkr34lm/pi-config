@@ -19,3 +19,8 @@ export function loadSandboxesConfig(): SandboxConfig {
     return parseResult.data;
   }
 }
+
+export async function writeSandboxesConfig(config: SandboxConfig) {
+  const configContent = JSON.stringify(config, null, 2);
+  await fs.promises.writeFile(SANDBOXES_CONFIG_FILE, configContent, "utf-8");
+}

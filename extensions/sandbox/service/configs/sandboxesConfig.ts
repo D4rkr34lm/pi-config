@@ -4,7 +4,7 @@ import { loadSandboxesConfig, writeSandboxesConfig } from "./loadSandboxConfig";
 import { loadSandboxDefinitions } from "./loadSandboxDefinitions";
 import { hasNoValue } from "../../../../utils/type-guards";
 
-const NONE_SANDBOX_NAME = "none";
+export const NONE_SANDBOX_NAME = "none";
 
 export class SandboxesConfig {
   public readonly definitions: { [name: string]: SandboxDefinition };

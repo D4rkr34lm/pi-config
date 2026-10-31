@@ -4,6 +4,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { useSandboxService } from "./service/sandboxService";
 import { hasValue } from "../../utils/type-guards";
+import { NONE_SANDBOX_NAME } from "./service/configs/sandboxesConfig";
 
 const SANDBOX_STATUS_KEY = "sandbox-status";
 
@@ -29,7 +30,7 @@ async function runSandboxStartup(pi: ExtensionAPI, ctx: ExtensionContext) {
       sandboxService.getAvailableSandboxDefinitions();
     const selectedDefinition = await ctx.ui.select(
       "Select a sandbox definition to use for this project",
-      availableDefinitions.map((def) => def.name)
+      [...availableDefinitions.map((def) => def.name), NONE_SANDBOX_NAME]
     );
 
     if (hasValue(selectedDefinition)) {

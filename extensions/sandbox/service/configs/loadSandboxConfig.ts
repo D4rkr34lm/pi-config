@@ -11,6 +11,7 @@ export function loadSandboxesConfig(): SandboxConfig {
   }
 
   const configContent = fs.readFileSync(SANDBOXES_CONFIG_FILE, "utf-8");
+  console.log("Loaded sandboxes config:", configContent);
   const parseResult = sandboxConfigSchema.safeParse(JSON.parse(configContent));
 
   if (!parseResult.success) {

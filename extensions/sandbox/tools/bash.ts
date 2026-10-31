@@ -31,15 +31,17 @@ export function buildSandboxedBashTool(sandbox: Sandbox) {
             { signal }
           );
 
+        let exitCode: number | null = null;
+
         for await (const data of commandOutputStream) {
           if (data.type === "stdout" || data.type === "stderr") {
             onData(Buffer.from(data.data));
           } else {
-            return { exitCode: data.code };
+            exitCode = data.code;
           }
         }
 
-        return { exitCode: null };
+        return { exitCode };
       },
     },
   });

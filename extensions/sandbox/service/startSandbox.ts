@@ -161,6 +161,7 @@ export async function startSandbox(
     links: [
       httpBatchStreamLink({
         url: `http://localhost:${sandboxPort}`,
+        maxItems: 1,
       }),
     ],
   });

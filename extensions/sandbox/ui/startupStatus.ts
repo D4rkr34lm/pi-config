@@ -28,10 +28,14 @@ function describeProgress(progress: SandboxStartupProgressEvent): string {
 export function createSandboxStartupUi(ctx: ExtensionContext) {
   const startedAt = Date.now();
   let currentProgress: SandboxStartupProgressEvent | undefined;
+  let isStopping = false;
   let updateLoader: (() => void) | undefined;
 
   const formatLoaderMessage = () => {
     const elapsed = formatDuration(Date.now() - startedAt);
+    if (isStopping) {
+      return `Sandbox · Stopping containers · ${elapsed}`;
+    }
     if (currentProgress === undefined) {
       return `Sandbox · Preparing · ${elapsed}`;
     }
@@ -93,6 +97,13 @@ export function createSandboxStartupUi(ctx: ExtensionContext) {
       clearStartupWidget();
       const icon = ctx.ui.theme.fg("success", "✓");
       const status = ctx.ui.theme.fg("dim", `Sandbox: ${definitionName}`);
+      ctx.ui.setStatus(SANDBOX_STATUS_KEY, `${icon} ${status}`);
+    },
+    stopping() {
+      isStopping = true;
+      showStartupWidget();
+      const icon = ctx.ui.theme.fg("accent", "◌");
+      const status = ctx.ui.theme.fg("dim", "Sandbox: stopping containers");
       ctx.ui.setStatus(SANDBOX_STATUS_KEY, `${icon} ${status}`);
     },
     disabled() {

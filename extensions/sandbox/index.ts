@@ -83,9 +83,16 @@ export default async function (pi: ExtensionAPI) {
     await runSandboxStartup(sandboxService, pi, ctx);
   });
 
-  pi.on("session_shutdown", async (event) => {
+  pi.on("session_shutdown", async (event, ctx) => {
     if (event.reason === "quit" || event.reason === "reload") {
-      await sandboxService.stopAllSandboxes();
+      const sandboxUi = createSandboxStartupUi(ctx);
+      sandboxUi.stopping();
+
+      try {
+        await sandboxService.stopAllSandboxes();
+      } finally {
+        sandboxUi.disabled();
+      }
     }
   });
 

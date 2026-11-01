@@ -1,11 +1,12 @@
-export type TypeIssue = {
-  type: "type";
+export type CodeIssue = {
+  type: "type" | "lint" | "format" | "build";
   position: {
     path: string;
     line: number;
     column: number;
   };
   message: string;
+  sourceExcerpt?: string;
 };
 
 export type TestIssue = {
@@ -16,7 +17,7 @@ export type RuntimeIssue = {
   type: "runtime";
 };
 
-export type Issue = TypeIssue | TestIssue | RuntimeIssue;
+export type Issue = CodeIssue | TestIssue | RuntimeIssue;
 
 export type IssueReporter = {
   id: string;

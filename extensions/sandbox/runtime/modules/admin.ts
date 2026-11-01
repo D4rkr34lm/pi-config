@@ -1,7 +1,9 @@
+import fs from "fs/promises";
 import z from "zod";
 import { protectedProcedure, publicProcedure, router } from "../trpc";
 import { setupStorage } from "../storage";
 import { denyAccessToGlob } from "../utils/denyAccessToGlob";
+import { SANDBOX_GROUP_ID, SANDBOX_USER_ID } from "../constants";
 
 const isAvailable = publicProcedure.query(() => ({
   isAvailable: true,
@@ -11,10 +13,17 @@ const setup = protectedProcedure
   .input(
     z.object({
       forbiddenGlobs: z.array(z.string()),
+      writablePaths: z.array(z.string()),
     })
   )
   .mutation(async ({ input }) => {
-    const { forbiddenGlobs } = input;
+    const { forbiddenGlobs, writablePaths } = input;
+
+    await Promise.all(
+      writablePaths.map((path) =>
+        fs.chown(path, SANDBOX_USER_ID, SANDBOX_GROUP_ID)
+      )
+    );
 
     const denyPromises = forbiddenGlobs.map((glob) => {
       return denyAccessToGlob(glob);

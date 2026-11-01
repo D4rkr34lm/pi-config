@@ -130,7 +130,11 @@ describe("start Sandbox", { concurrent: false }, () => {
             command: "printf 'Unauthorized command' > auth-test.txt",
             authToken,
           }),
-          sandbox.api.admin.setup.mutate({ forbiddenGlobs: [], authToken }),
+          sandbox.api.admin.setup.mutate({
+            forbiddenGlobs: [],
+            writablePaths: [],
+            authToken,
+          }),
         ].map((result) =>
           expect(result).rejects.toMatchObject({
             data: { code: "UNAUTHORIZED" },
@@ -410,7 +414,7 @@ describe("start Sandbox", { concurrent: false }, () => {
       await using testSetup = await setupTestSandbox(
         defineSandbox({
           name: "test-private-paths",
-          privatePaths: ["/workspace/private"],
+          privatePaths: ["private"],
         })
       );
 
@@ -423,13 +427,17 @@ describe("start Sandbox", { concurrent: false }, () => {
         })
       ).resolves.toEqual({ type: "error", message: "FILE_NOT_FOUND" });
 
-      await expect(
-        sandbox.api.fileSystem.writeFile.mutate({
-          path: "/workspace/private/test.txt",
-          content: containerPrivateFileContent,
-          authToken: sandbox.authToken,
-        })
-      ).resolves.toEqual({ type: "success" });
+      const privatePathWrite = await sandbox.api.shell.executeCommand.mutate({
+        command: `printf %s ${JSON.stringify(containerPrivateFileContent)} > /workspace/private/test.txt`,
+        authToken: sandbox.authToken,
+      });
+
+      await expect(collectShellStream(privatePathWrite)).resolves.toMatchObject(
+        {
+          exitCode: 0,
+          stderr: "",
+        }
+      );
 
       const sandboxFileReadResult = await sandbox.api.fileSystem.readFile.query(
         {

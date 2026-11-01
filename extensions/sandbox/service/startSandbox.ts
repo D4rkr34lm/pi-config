@@ -14,8 +14,13 @@ import { range } from "lodash-es";
 import { hash, randomUUID } from "crypto";
 import type { SandboxStartupProgressHandler } from "./sandboxStartupProgress";
 
+const SANDBOX_IMAGE_VERSION = 2;
+
 function getSandboxImageTag(definition: SandboxDefinition) {
-  return `pi-sandbox-${definition.name}-${hash("sha1", JSON.stringify(definition))}:latest`;
+  return `pi-sandbox-${definition.name}-${hash(
+    "sha1",
+    JSON.stringify({ imageVersion: SANDBOX_IMAGE_VERSION, definition })
+  )}:latest`;
 }
 
 function getSandboxBuildContext() {
@@ -133,12 +138,13 @@ export async function startSandbox(
     await buildSandboxImage(definition);
   }
 
+  const privateVolumes = assemblePrivateVolumeMounts(definition);
   const volumes: Volume[] = [
     {
       source: path.resolve(workspacePath),
       target: SANDBOX_WORKING_DIR,
     },
-    ...assemblePrivateVolumeMounts(definition),
+    ...privateVolumes,
   ];
 
   const sandboxPort = getSandboxPort();
@@ -192,6 +198,7 @@ export async function startSandbox(
         "/runtime/**",
         ...definition.fileSystemSettings.forbiddenPaths,
       ],
+      writablePaths: privateVolumes.map(({ target }) => target),
     });
 
     for (const command of definition.runAfterStart) {

@@ -1,11 +1,23 @@
+## Search and Inspection Rules
+
+When exploring a codebase:
+
+- Search progressively, moving from repository structure and file discovery to matching files, relevant ranges, and broader context as needed.
+- Prefer `rg --files` for file discovery and `rg -l` for locating files containing a pattern. Use `rg -n` when matching lines are needed directly.
+- Scope searches to relevant directories, file types, and patterns. Exclude dependencies, build artifacts, coverage, and generated files by default unless relevant to the task.
+- Keep exploratory output below approximately 120 lines or 10 KB. If a search would exceed this budget, narrow its scope rather than truncating broad results.
+- Inspect relevant ranges around matches before reading entire files. Read broader context when necessary to understand behavior, dependencies, contracts, or invariants.
+- Avoid repeating searches or rereading unchanged content unless doing so resolves a specific uncertainty.
+- Expand the search scope only when existing evidence is insufficient. Each expansion should address a specific unresolved question.
+- Stop exploring once sufficient evidence exists to make the change confidently. Resume exploration when implementation or verification reveals new uncertainties.
+
+Before modifying existing code:
+
+- Identify the relevant entry points, call sites, and dependencies needed to understand the affected behavior.
+- Establish which existing contracts, invariants, and conventions the change must preserve.
+- Prefer targeted inspection over exhaustive repository exploration, but do not sacrifice correctness to minimize tool calls or output.d
+
 # Implementation Rules
-
-Before writing code that interacts with existing code, first check:
-
-* Whether existing code can be reused
-* Whether existing code should be changed or generalized to support both the existing use case and the new one
-* Whether introducing a new abstraction is actually justified, or whether it would add unnecessary coupling or indirection
-* Which existing invariants, contracts, and conventions must be preserved
 
 When writing code:
 

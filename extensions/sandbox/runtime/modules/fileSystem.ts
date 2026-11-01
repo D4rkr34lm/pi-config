@@ -5,6 +5,7 @@ import { protectedProcedure, router } from "../trpc";
 import { SANDBOX_GROUP_ID, SANDBOX_USER_ID } from "../constants";
 import { isPathForbidden } from "../utils/isPathForbidden";
 
+// TODO: fix files being owned by sandbox and not host user when created
 const SANDBOX_FILE_MODE = 0o644;
 const SANDBOX_DIRECTORY_MODE = 0o755;
 

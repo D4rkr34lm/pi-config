@@ -14,7 +14,7 @@ import { range } from "lodash-es";
 import { hash, randomUUID } from "crypto";
 import type { SandboxStartupProgressHandler } from "./sandboxStartupProgress";
 
-const SANDBOX_IMAGE_VERSION = 2;
+const SANDBOX_IMAGE_VERSION = 3;
 
 function getSandboxImageTag(definition: SandboxDefinition) {
   return `pi-sandbox-${definition.name}-${hash(

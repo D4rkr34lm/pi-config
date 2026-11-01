@@ -1,7 +1,50 @@
 import z from "zod";
 import fs from "fs/promises";
+import path from "path";
 import { protectedProcedure, router } from "../trpc";
+import { SANDBOX_GROUP_ID, SANDBOX_USER_ID } from "../constants";
 import { isPathForbidden } from "../utils/isPathForbidden";
+
+const SANDBOX_FILE_MODE = 0o644;
+const SANDBOX_DIRECTORY_MODE = 0o755;
+
+async function pathExists(targetPath: string): Promise<boolean> {
+  try {
+    await fs.lstat(targetPath);
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return false;
+    }
+
+    throw error;
+  }
+}
+
+async function makePathOwnedBySandbox(
+  targetPath: string,
+  mode: number
+): Promise<void> {
+  await fs.chown(targetPath, SANDBOX_USER_ID, SANDBOX_GROUP_ID);
+  await fs.chmod(targetPath, mode);
+}
+
+function createdDirectoryPaths(
+  firstCreatedPath: string,
+  targetPath: string
+): string[] {
+  return path
+    .relative(firstCreatedPath, targetPath)
+    .split(path.sep)
+    .filter(Boolean)
+    .reduce(
+      (createdPaths, part) => [
+        ...createdPaths,
+        path.join(createdPaths.at(-1) ?? firstCreatedPath, part),
+      ],
+      [firstCreatedPath]
+    );
+}
 
 const readFile = protectedProcedure
   .input(
@@ -97,7 +140,15 @@ const writeFile = protectedProcedure
     }
 
     try {
-      await fs.writeFile(input.path, input.content, "utf-8");
+      const existedBeforeWrite = await pathExists(input.path);
+      await fs.writeFile(input.path, input.content, {
+        encoding: "utf-8",
+        mode: SANDBOX_FILE_MODE,
+      });
+
+      if (!existedBeforeWrite) {
+        await makePathOwnedBySandbox(input.path, SANDBOX_FILE_MODE);
+      }
     } catch (e) {
       console.log(
         "[ERROR] Failed to write to file due to an unexpected error:",
@@ -140,7 +191,16 @@ const mkdir = protectedProcedure
     }
 
     try {
-      await fs.mkdir(input.path, { recursive: true });
+      const firstCreatedPath = await fs.mkdir(input.path, { recursive: true });
+
+      if (firstCreatedPath !== undefined) {
+        await Promise.all(
+          createdDirectoryPaths(firstCreatedPath, input.path).map(
+            (createdPath) =>
+              makePathOwnedBySandbox(createdPath, SANDBOX_DIRECTORY_MODE)
+          )
+        );
+      }
     } catch (e) {
       console.log(
         "[ERROR] Failed to create directory due to an unexpected error:",

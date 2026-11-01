@@ -7,7 +7,12 @@ import z from "zod";
 import { omit, toString } from "lodash-es";
 import { SANDBOX_GROUP_ID, SANDBOX_USER_ID } from "../constants";
 
-const commandEnvironment = omit(process.env, "SANDBOX_AUTH_TOKEN");
+const commandEnvironment = {
+  ...omit(process.env, "SANDBOX_AUTH_TOKEN", "HOME", "USER", "LOGNAME"),
+  HOME: "/home/sandbox",
+  USER: "sandbox",
+  LOGNAME: "sandbox",
+};
 
 type CommandOutput =
   | { type: "stdout"; data: string }

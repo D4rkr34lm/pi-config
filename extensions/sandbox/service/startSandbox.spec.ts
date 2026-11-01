@@ -190,6 +190,55 @@ describe("start Sandbox", { concurrent: false }, () => {
   );
 
   it(
+    "makes files created through the sandbox filesystem accessible to its shell",
+    async () => {
+      await using testSetup = await setupTestSandbox(
+        defineSandbox({ name: "test-sandbox-file-access" })
+      );
+
+      const relativeFilePath = "sandbox-created/note.txt";
+      const sandboxDirectory = "/workspace/sandbox-created";
+      const sandboxFilePath = `/workspace/${relativeFilePath}`;
+      const fileContent = "Created through the sandbox filesystem";
+      const generatedDirectory = path.join(
+        TEST_SANDBOX_DIR,
+        path.dirname(relativeFilePath)
+      );
+      const { sandbox } = testSetup;
+
+      try {
+        await expect(
+          sandbox.api.fileSystem.mkdir.mutate({
+            path: sandboxDirectory,
+            authToken: sandbox.authToken,
+          })
+        ).resolves.toEqual({ type: "success" });
+        await expect(
+          sandbox.api.fileSystem.writeFile.mutate({
+            path: sandboxFilePath,
+            content: fileContent,
+            authToken: sandbox.authToken,
+          })
+        ).resolves.toEqual({ type: "success" });
+
+        const shellOutput = await sandbox.api.shell.executeCommand.mutate({
+          command: `cat ${sandboxFilePath}`,
+          authToken: sandbox.authToken,
+        });
+
+        await expect(collectShellStream(shellOutput)).resolves.toEqual({
+          stdout: fileContent,
+          stderr: "",
+          exitCode: 0,
+        });
+      } finally {
+        fs.rmSync(generatedDirectory, { recursive: true, force: true });
+      }
+    },
+    TEST_TIMEOUT
+  );
+
+  it(
     "allows reading a file in the sandbox from the workspace",
     async () => {
       const filePath = "test-file.txt";

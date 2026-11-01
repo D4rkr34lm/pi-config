@@ -1,5 +1,5 @@
 export type CodeIssue = {
-  type: "type" | "lint" | "format" | "build";
+  type: "build" | "lint" | "format";
   position: {
     path: string;
     line: number;
@@ -7,19 +7,4 @@ export type CodeIssue = {
   };
   message: string;
   sourceExcerpt?: string;
-};
-
-export type TestIssue = {
-  type: "test";
-};
-
-export type RuntimeIssue = {
-  type: "runtime";
-};
-
-export type Issue = CodeIssue | TestIssue | RuntimeIssue;
-
-export type IssueReporter = {
-  id: string;
-  formatOutput: (commandOutput: string) => Issue[];
 };

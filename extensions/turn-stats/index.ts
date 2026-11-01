@@ -21,6 +21,7 @@ interface AgentWorkStats {
   durationMs: number;
   inputTokens: number;
   outputTokens: number;
+  cacheReadTokens: number;
 }
 
 function extractUsages(entries: readonly SessionEntry[]): Usage[] {
@@ -68,8 +69,9 @@ export default function (pi: ExtensionAPI) {
       (total, usage) => ({
         input: total.input + usage.input,
         output: total.output + usage.output,
+        cacheRead: total.cacheRead + usage.cacheRead,
       }),
-      { input: 0, output: 0 }
+      { input: 0, output: 0, cacheRead: 0 }
     );
     const start = new Date(latestAgentWorkStartEntry.timestamp);
     const end = new Date();
@@ -85,6 +87,7 @@ export default function (pi: ExtensionAPI) {
             durationMs: Math.max(0, end.getTime() - start.getTime()),
             inputTokens: tokenUsage.input,
             outputTokens: tokenUsage.output,
+            cacheReadTokens: tokenUsage.cacheRead,
           } satisfies AgentWorkStats,
         },
       ],
@@ -109,6 +112,7 @@ export default function (pi: ExtensionAPI) {
             entry.data.outputTokens
           )}`
         ),
+        theme.fg("dim", `R ${formatTokens(entry.data.cacheReadTokens)}`),
       ].join(separator);
 
       return new Text(line, 1, 0);

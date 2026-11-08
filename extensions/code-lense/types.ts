@@ -1,10 +1,15 @@
-export type CodeIssue = {
-  type: "build" | "lint" | "format";
-  position: {
-    path: string;
+export interface Issue {
+  provider: string;
+  location: {
+    file: string;
     line: number;
-    column: number;
+    character: number;
   };
   message: string;
-  sourceExcerpt?: string;
-};
+  severity: "error" | "warning" | "info";
+}
+
+export interface Provider {
+  getIssues: () => Promise<Issue[]>;
+  close: () => Promise<void>;
+}

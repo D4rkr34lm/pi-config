@@ -13,14 +13,19 @@ import { fileURLToPath } from "url";
 import { range } from "lodash-es";
 import { hash, randomUUID } from "crypto";
 import type { SandboxStartupProgressHandler } from "./sandboxStartupProgress";
+import { SandboxesCache } from "./configs/sandboxesCache";
 
 const SANDBOX_IMAGE_VERSION = 3;
 
-function getSandboxImageTag(definition: SandboxDefinition) {
-  return `pi-sandbox-${definition.name}-${hash(
+function getSandboxDefinitionHash(definition: SandboxDefinition) {
+  return hash(
     "sha1",
-    JSON.stringify({ imageVersion: SANDBOX_IMAGE_VERSION, definition })
-  )}:latest`;
+    JSON.stringify({ imageVersion: SANDBOX_IMAGE_VERSION, definition }),
+  );
+}
+
+function getSandboxImageTag(definition: SandboxDefinition) {
+  return `pi-sandbox-${definition.name}-${getSandboxDefinitionHash(definition)}:latest`;
 }
 
 function getSandboxBuildContext() {
@@ -28,7 +33,7 @@ function getSandboxBuildContext() {
 }
 
 async function waitForSandboxApi(
-  sandboxApi: TRPCClient<AppRouter>
+  sandboxApi: TRPCClient<AppRouter>,
 ): Promise<void> {
   let attempts = 100;
 
@@ -43,7 +48,7 @@ async function waitForSandboxApi(
           "Sandbox API did not become available after 100 attempts",
           {
             cause: error,
-          }
+          },
         );
       }
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -54,7 +59,7 @@ async function waitForSandboxApi(
 async function runSandboxSetupCommand(
   sandboxApi: TRPCClient<AppRouter>,
   authToken: string,
-  command: string
+  command: string,
 ): Promise<void> {
   const output = await sandboxApi.shell.executeCommand.mutate({
     authToken,
@@ -66,7 +71,7 @@ async function runSandboxSetupCommand(
   for await (const event of output) {
     if (event.type === "exit" && event.code !== 0) {
       throw new Error(
-        `Sandbox setup command failed with exit code ${event.code}: ${command}\n${stderr}`
+        `Sandbox setup command failed with exit code ${event.code}: ${command}\n${stderr}`,
       );
     } else if (event.type === "stderr") {
       stderr += event.data;
@@ -93,14 +98,23 @@ async function doesSandboxImageExist(imageTag: string): Promise<boolean> {
   return allImages.some((image) => image.includes(imageTag));
 }
 
-function getSandboxPort() {
+function genrateSandboxPort() {
   const portRange = range(30000, 40000);
   const randomIndex = Math.floor(Math.random() * portRange.length);
   return portRange[randomIndex] ?? 30000;
 }
 
+function generateSandboxId(
+  sandboxDefinition: SandboxDefinition,
+  workspacePath: string,
+): string {
+  const reuseId =
+    sandboxDefinition.reuseSandboxById?.(workspacePath) ?? randomUUID();
+  return `pi-sandbox-${sandboxDefinition.name}-${getSandboxDefinitionHash(sandboxDefinition)}-${reuseId}`;
+}
+
 export function assemblePrivateVolumeMounts(
-  sandboxDefinition: SandboxDefinition
+  sandboxDefinition: SandboxDefinition,
 ): Volume[] {
   return sandboxDefinition.fileSystemSettings.privatePaths.map((path) => ({
     target: `${SANDBOX_WORKING_DIR}/${path}`,
@@ -108,19 +122,95 @@ export function assemblePrivateVolumeMounts(
 }
 
 export interface Sandbox {
+  id: string;
+  containerId: string;
   workspacePath: string;
   definition: SandboxDefinition;
   authToken: string;
+  port: number;
   api: TRPCClient<AppRouter>;
   stop: () => Promise<void>;
+}
+
+export async function connectToSandbox(args: {
+  id: string;
+  containerId: string;
+  workspacePath: string;
+  definition: SandboxDefinition;
+  authToken: string;
+  port: number;
+}): Promise<Sandbox> {
+  const { id, workspacePath, definition, authToken, port, containerId } = args;
+
+  const sandboxApi = createTRPCClient<AppRouter>({
+    links: [
+      httpBatchStreamLink({
+        url: `http://localhost:${port}`,
+        maxItems: 1,
+      }),
+    ],
+  });
+
+  const stopContainer = async (): Promise<void> => {
+    const dockerApi = useSimpleDockerApi();
+    await dockerApi.stopContainer(containerId);
+
+    if (!definition.reuseSandboxById) {
+      await dockerApi.removeContainer(containerId);
+    }
+  };
+
+  try {
+    await waitForSandboxApi(sandboxApi);
+  } catch (error) {
+    await stopContainer();
+    throw error;
+  }
+
+  return {
+    id,
+    containerId,
+    port,
+    workspacePath,
+    definition,
+    authToken,
+    api: sandboxApi,
+    stop: stopContainer,
+  };
 }
 
 export async function startSandbox(
   definition: SandboxDefinition,
   workspacePath: string,
-  onProgress?: SandboxStartupProgressHandler
+  onProgress?: SandboxStartupProgressHandler,
 ): Promise<Sandbox> {
   const dockerApi = useSimpleDockerApi();
+  const sandboxId = generateSandboxId(definition, workspacePath);
+  const sandboxesCache = definition.reuseSandboxById
+    ? SandboxesCache.load()
+    : null;
+  const cachedSandbox = sandboxesCache?.get(sandboxId);
+
+  if (cachedSandbox) {
+    onProgress?.({
+      phase: "starting-container",
+      definitionName: definition.name,
+    });
+    await dockerApi.startContainer(cachedSandbox.containerId);
+
+    onProgress?.({
+      phase: "waiting-for-api",
+      definitionName: definition.name,
+    });
+    return connectToSandbox({
+      id: sandboxId,
+      containerId: cachedSandbox.containerId,
+      workspacePath,
+      definition,
+      authToken: cachedSandbox.authToken,
+      port: cachedSandbox.sandboxPort,
+    });
+  }
 
   const imageTag = getSandboxImageTag(definition);
 
@@ -147,7 +237,7 @@ export async function startSandbox(
     ...privateVolumes,
   ];
 
-  const sandboxPort = getSandboxPort();
+  const sandboxPort = genrateSandboxPort();
   const authToken = randomUUID();
 
   onProgress?.({
@@ -155,7 +245,7 @@ export async function startSandbox(
     definitionName: definition.name,
   });
   const containerId = await dockerApi.runContainer({
-    containerName: `pi-sandbox-${definition.name}-${randomUUID()}`,
+    containerName: sandboxId,
     image: imageTag,
     env: { SANDBOX_AUTH_TOKEN: authToken, PORT: sandboxPort.toString() },
     volumes,
@@ -167,26 +257,22 @@ export async function startSandbox(
     ],
   });
 
-  const sandboxApi = createTRPCClient<AppRouter>({
-    links: [
-      httpBatchStreamLink({
-        url: `http://localhost:${sandboxPort}`,
-        maxItems: 1,
-      }),
-    ],
-  });
-
-  const stopContainer = async (): Promise<void> => {
-    await dockerApi.stopContainer(containerId);
-    await dockerApi.removeContainer(containerId);
-  };
-
   try {
     onProgress?.({
       phase: "waiting-for-api",
       definitionName: definition.name,
     });
-    await waitForSandboxApi(sandboxApi);
+
+    const sandbox = await connectToSandbox({
+      id: sandboxId,
+      workspacePath,
+      definition,
+      authToken,
+      port: sandboxPort,
+      containerId,
+    });
+
+    const { api: sandboxApi } = sandbox;
 
     onProgress?.({
       phase: "applying-policy",
@@ -211,15 +297,15 @@ export async function startSandbox(
       await runSandboxSetupCommand(sandboxApi, authToken, command);
     }
 
-    return {
-      workspacePath,
-      definition,
+    sandboxesCache?.set({
+      id: sandboxId,
+      containerId,
+      sandboxPort,
       authToken,
-      api: sandboxApi,
-      stop: stopContainer,
-    };
+    });
+
+    return sandbox;
   } catch (error) {
-    await stopContainer();
     throw error;
   }
 }

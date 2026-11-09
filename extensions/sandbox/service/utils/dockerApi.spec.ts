@@ -75,4 +75,45 @@ describe("Simple docker API", () => {
     await sut.removeContainer(containerId);
     await sut.removeImage(MOCK_TAG);
   });
+
+  it("allows for starting a stopped container", async () => {
+    const MOCK_TAG = "simple-docker-api-start-test-image:latest";
+    const MOCK_CONTAINER_NAME = "simple-docker-api-start-test-container";
+
+    const MOCK_DOCKERFILE = `FROM alpine:latest
+      RUN echo "Hello, World!" > /hello.txt
+    `;
+
+    await sut.buildImage({
+      dockerfile: MOCK_DOCKERFILE,
+      tag: MOCK_TAG,
+      context: ".",
+    });
+
+    const containerId = await sut.runContainer({
+      containerName: MOCK_CONTAINER_NAME,
+      image: MOCK_TAG,
+      env: {},
+      volumes: [],
+      ports: [],
+    });
+
+    expect(containerId).toBeDefined();
+
+    await sut.stopContainer(containerId);
+
+    const activeContainersAfterStop = await sut.listContainers();
+
+    expect(activeContainersAfterStop).not.toContain(containerId);
+
+    await sut.startContainer(containerId);
+
+    const activeContainersAfterStart = await sut.listContainers();
+
+    expect(activeContainersAfterStart).toContain(containerId);
+
+    await sut.stopContainer(containerId);
+    await sut.removeContainer(containerId);
+    await sut.removeImage(MOCK_TAG);
+  });
 });

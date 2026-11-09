@@ -17,6 +17,7 @@ export interface SandboxDefinition {
   fileSystemSettings: FileSystemSettings;
   dependencies: Dependencies;
   runAfterStart: string[];
+  reuseSandboxById?: (cwd: string) => string;
 }
 
 export function defineSandbox(definition: {
@@ -25,6 +26,7 @@ export function defineSandbox(definition: {
   privatePaths?: string[];
   dependencies?: Partial<Dependencies>;
   runAfterStart?: string[];
+  reuseSandboxById?: (cwd: string) => string;
 }): SandboxDefinition {
   return {
     name: definition.name,
@@ -34,5 +36,6 @@ export function defineSandbox(definition: {
     },
     dependencies: definition.dependencies ?? {},
     runAfterStart: definition.runAfterStart ?? [],
+    reuseSandboxById: definition.reuseSandboxById,
   };
 }

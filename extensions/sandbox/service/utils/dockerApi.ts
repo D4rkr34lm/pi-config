@@ -77,6 +77,10 @@ export function useSimpleDockerApi() {
     return stdout.trim();
   };
 
+  const startContainer = async (containerId: string): Promise<void> => {
+    await execFile("docker", ["start", containerId]);
+  };
+
   const stopContainer = async (containerId: string): Promise<void> => {
     await execFile("docker", ["stop", containerId]);
   };
@@ -86,7 +90,7 @@ export function useSimpleDockerApi() {
   };
 
   const listContainers = async (
-    options: { all?: boolean } = {}
+    options: { all?: boolean } = {},
   ): Promise<string[]> => {
     const { all = false } = options;
     const args = ["ps", "--no-trunc", "--format", "{{.ID}}"];
@@ -125,5 +129,6 @@ export function useSimpleDockerApi() {
     listImages,
     removeImage,
     listContainers,
+    startContainer,
   };
 }

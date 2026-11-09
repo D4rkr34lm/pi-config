@@ -1,4 +1,5 @@
 import { defineSandbox } from "../extensions/sandbox/service/defineSandbox";
+import fs from "fs"
 
 export default defineSandbox({
   name: "node-latest",
@@ -8,7 +9,6 @@ export default defineSandbox({
     node: true,
     npm: true,
     tsx: true,
-    bun: "1.4.4",
   },
-  runAfterStart: ["bun install"],
+  runAfterStart: ["npm ci"],
 });
